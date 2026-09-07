@@ -2,6 +2,7 @@ mod backup;
 mod commands;
 mod db;
 mod models;
+mod shortcut;
 
 use std::sync::Mutex;
 use tauri::Manager;
@@ -11,9 +12,20 @@ pub struct Db(pub Mutex<rusqlite::Connection>);
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(shortcut::handle)
+                .build(),
+        )
         .setup(|app| {
             let conn = db::init(app.handle())?;
             app.manage(Db(Mutex::new(conn)));
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_global_shortcut::GlobalShortcutExt;
+                app.global_shortcut().register("alt+space")?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

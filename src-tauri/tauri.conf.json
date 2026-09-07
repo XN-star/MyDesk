@@ -18,6 +18,18 @@
         "height": 800,
         "minWidth": 900,
         "minHeight": 600
+      },
+      {
+        "label": "quick",
+        "url": "quick.html",
+        "title": "快速面板",
+        "width": 560,
+        "height": 380,
+        "visible": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "center": true
       }
     ],
     "security": {
