@@ -2,16 +2,20 @@ mod backup;
 mod commands;
 mod db;
 mod models;
+mod reminders;
 mod shortcut;
 
+use std::collections::HashSet;
 use std::sync::Mutex;
 use tauri::Manager;
 
 pub struct Db(pub Mutex<rusqlite::Connection>);
+pub struct Notified(pub Mutex<HashSet<String>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -21,6 +25,8 @@ pub fn run() {
         .setup(|app| {
             let conn = db::init(app.handle())?;
             app.manage(Db(Mutex::new(conn)));
+            app.manage(Notified(Mutex::new(HashSet::new())));
+            reminders::start(app.handle().clone());
             #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::GlobalShortcutExt;
