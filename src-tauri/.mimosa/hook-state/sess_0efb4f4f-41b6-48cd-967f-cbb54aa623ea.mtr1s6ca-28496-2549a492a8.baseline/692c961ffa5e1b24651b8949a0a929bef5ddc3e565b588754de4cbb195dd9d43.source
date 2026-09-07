@@ -1,5 +1,6 @@
 use crate::{Db, Notified};
 use rusqlite::{params, Connection};
+use std::collections::HashSet;
 use std::time::Duration;
 use tauri::{Manager, State};
 use tauri_plugin_notification::NotificationExt;

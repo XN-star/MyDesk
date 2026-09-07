@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "个人工作台",
         "width": 1200,
         "height": 800,
@@ -21,6 +22,7 @@
       },
       {
         "label": "quick",
+        "create": false,
         "url": "quick.html",
         "title": "快速面板",
         "width": 560,

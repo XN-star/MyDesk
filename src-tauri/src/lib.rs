@@ -32,6 +32,11 @@ pub fn run() {
                 use tauri_plugin_global_shortcut::GlobalShortcutExt;
                 app.global_shortcut().register("alt+space")?;
             }
+            // 窗口配置 create=false：状态注册完成后手动创建，
+            // 避免前端过早 invoke 时 Db 状态尚未注册。
+            for window_config in app.config().app.windows.iter() {
+                tauri::WebviewWindowBuilder::from_config(app.handle(), window_config)?.build()?;
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
