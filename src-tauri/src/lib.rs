@@ -1,3 +1,4 @@
+mod backup;
 mod commands;
 mod db;
 mod models;
@@ -27,6 +28,8 @@ pub fn run() {
             commands::event_delete,
             commands::settings_all,
             commands::settings_set,
+            commands::backup_export,
+            commands::backup_import,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
