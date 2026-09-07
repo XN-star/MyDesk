@@ -1,51 +1,80 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useEffect } from 'react';
+import { listen } from '@tauri-apps/api/event';
+import { getCurrentWindow } from '@tauri-apps/api/window';
+import Sidebar from './components/Sidebar';
+import TodayBar from './components/TodayBar';
+import Toasts from './components/Toasts';
+import TaskDrawer from './features/tasks/TaskDrawer';
+import SettingsPage from './features/settings/SettingsPage';
+import { enabledModules } from './modules/registry';
+import { applyTheme } from './lib/theme';
+import { useEventStore } from './stores/events';
+import { useSettingsStore } from './stores/settings';
+import { useTaskStore } from './stores/tasks';
+import { useUiStore } from './stores/ui';
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+export default function App() {
+  const activePage = useUiStore((s) => s.activePage);
+  const drawer = useUiStore((s) => s.drawer);
+  const enabled = enabledModules(useSettingsStore((s) => s.enabledModules));
+  const theme = useSettingsStore((s) => s.theme);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    useSettingsStore.getState().load().then(() => {
+      useTaskStore.getState().load();
+      useEventStore.getState().loadMonth();
+    });
+  }, []);
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (theme !== 'system') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const fn = () => applyTheme('system');
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, [theme]);
+
+  useEffect(() => {
+    const un1 = listen('quick://changed', () => {
+      useTaskStore.getState().load();
+      useEventStore.getState().loadMonth();
+    });
+    const un2 = listen<{ type: 'task' | 'event'; id: string }>('quick://open', async (e) => {
+      const w = getCurrentWindow();
+      await w.show();
+      await w.setFocus();
+      if (e.payload.type === 'task') useUiStore.getState().openTask(e.payload.id);
+    });
+    return () => {
+      un1.then((f) => f());
+      un2.then((f) => f());
+    };
+  }, []);
+
+  const current = enabled.find((m) => m.id === activePage) ?? enabled[0];
+  const Page = current?.component;
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app">
+      <Sidebar />
+      <div className="main">
+        <TodayBar />
+        <div className="content">
+          {activePage === 'settings' ? (
+            <SettingsPage />
+          ) : Page ? (
+            <Page />
+          ) : (
+            <div className="empty">请先在设置中启用至少一个模块</div>
+          )}
+        </div>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      {drawer && <TaskDrawer />}
+      <Toasts />
+    </div>
   );
 }
-
-export default App;
