@@ -1,0 +1,32 @@
+mod commands;
+mod db;
+mod models;
+
+use std::sync::Mutex;
+
+pub struct Db(pub Mutex<rusqlite::Connection>);
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .setup(|app| {
+            let conn = db::init(app.handle())?;
+            app.manage(Db(Mutex::new(conn)));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            commands::task_list,
+            commands::task_create,
+            commands::task_update,
+            commands::task_delete,
+            commands::event_list_month,
+            commands::event_list_date,
+            commands::event_create,
+            commands::event_update,
+            commands::event_delete,
+            commands::settings_all,
+            commands::settings_set,
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
