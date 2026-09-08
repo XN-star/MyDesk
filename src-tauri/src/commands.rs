@@ -100,6 +100,51 @@ pub fn task_delete(db: DbState, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn note_list(db: DbState) -> Result<Vec<Note>, String> {
+    with_conn(db, query_all_notes)
+}
+
+#[tauri::command]
+pub fn note_create(db: DbState, input: NoteInput) -> Result<Note, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        let n = Note {
+            id: Uuid::new_v4().to_string(),
+            title: input.title,
+            content: input.content,
+            pinned: false,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        c.execute(
+            NOTE_INSERT,
+            params![n.id, n.title, n.content, n.pinned, n.created_at, n.updated_at],
+        )?;
+        Ok(n)
+    })
+}
+
+#[tauri::command]
+pub fn note_update(db: DbState, note: Note) -> Result<Note, String> {
+    with_conn(db, move |c| {
+        let now = now_iso();
+        c.execute(
+            "UPDATE notes SET title=?2, content=?3, pinned=?4, updated_at=?5 WHERE id=?1",
+            params![note.id, note.title, note.content, note.pinned, now],
+        )?;
+        Ok(Note { updated_at: now, ..note })
+    })
+}
+
+#[tauri::command]
+pub fn note_delete(db: DbState, id: String) -> Result<(), String> {
+    with_conn(db, move |c| {
+        c.execute("DELETE FROM notes WHERE id=?1", params![id])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
 pub fn settings_all(db: DbState) -> Result<HashMap<String, String>, String> {
     with_conn(db, |c| {
         let rows = query_all_settings(c)?;
