@@ -4,6 +4,9 @@ use serde::{Deserialize, Serialize};
 pub const TASK_COLS: &str = "id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at";
 pub const TASK_INSERT: &str = "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)";
 pub const SETTING_INSERT: &str = "INSERT INTO settings (key, value) VALUES (?1, ?2)";
+pub const NOTE_COLS: &str = "id, title, content, pinned, created_at, updated_at";
+pub const NOTE_INSERT: &str =
+    "INSERT INTO notes (id, title, content, pinned, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -55,6 +58,25 @@ pub struct SettingRow {
     pub value: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Note {
+    pub id: String,
+    pub title: String,
+    pub content: String,
+    pub pinned: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteInput {
+    pub title: String,
+    #[serde(default)]
+    pub content: String,
+}
+
 pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
@@ -86,6 +108,24 @@ pub fn query_all_settings(c: &Connection) -> rusqlite::Result<Vec<SettingRow>> {
             value: r.get(1)?,
         })
     })?;
+    rows.collect()
+}
+
+pub fn note_from_row(r: &Row) -> rusqlite::Result<Note> {
+    Ok(Note {
+        id: r.get(0)?,
+        title: r.get(1)?,
+        content: r.get(2)?,
+        pinned: r.get(3)?,
+        created_at: r.get(4)?,
+        updated_at: r.get(5)?,
+    })
+}
+
+pub fn query_all_notes(c: &Connection) -> rusqlite::Result<Vec<Note>> {
+    let mut stmt =
+        c.prepare(&format!("SELECT {NOTE_COLS} FROM notes ORDER BY pinned DESC, updated_at DESC"))?;
+    let rows = stmt.query_map([], note_from_row)?;
     rows.collect()
 }
 
@@ -128,5 +168,41 @@ mod tests {
         let json = r#"{"title":"静默任务","remindMinutesBefore":null}"#;
         let input: TaskInput = serde_json::from_str(json).unwrap();
         assert_eq!(input.remind_minutes_before, None);
+    }
+
+    #[test]
+    fn note_roundtrip_via_row_mapping() {
+        let c = mem();
+        c.execute(
+            NOTE_INSERT,
+            params!["n1", "会议记录", "第一行内容", 1, "2026-09-08T10:00:00", "2026-09-08T10:00:00"],
+        )
+        .unwrap();
+        let got = query_all_notes(&c).unwrap();
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].id, "n1");
+        assert_eq!(got[0].title, "会议记录");
+        assert_eq!(got[0].content, "第一行内容");
+        assert!(got[0].pinned);
+        assert_eq!(got[0].created_at, "2026-09-08T10:00:00");
+    }
+
+    #[test]
+    fn notes_order_pinned_then_updated_desc() {
+        let c = mem();
+        c.execute(NOTE_INSERT, params!["a", "旧未置顶", "", 0, "2026-09-08T09:00:00", "2026-09-08T09:00:00"]).unwrap();
+        c.execute(NOTE_INSERT, params!["b", "新未置顶", "", 0, "2026-09-08T11:00:00", "2026-09-08T11:00:00"]).unwrap();
+        c.execute(NOTE_INSERT, params!["p", "置顶", "", 1, "2026-09-08T08:00:00", "2026-09-08T08:00:00"]).unwrap();
+        let got = query_all_notes(&c).unwrap();
+        let ids: Vec<&str> = got.iter().map(|n| n.id.as_str()).collect();
+        assert_eq!(ids, vec!["p", "b", "a"]);
+    }
+
+    #[test]
+    fn note_input_defaults() {
+        let json = r#"{"title":"随手记"}"#;
+        let input: NoteInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.title, "随手记");
+        assert_eq!(input.content, "");
     }
 }
