@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import TimeSpinner from '../../components/TimeSpinner';
 import { fromDate } from '../../lib/format';
+import { REMIND_OPTIONS, remindToNumber } from '../../lib/remind';
 import { useTaskStore } from '../../stores/tasks';
 import { tasksForDate } from './selectors';
 
@@ -10,12 +11,14 @@ export default function DayPanel({ date }: { date: string }) {
 
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('09:00');
+  const [remind, setRemind] = useState('0');
 
   async function add() {
     if (!title.trim()) return;
     await useTaskStore.getState().create({
       title: title.trim(),
       dueAt: `${date}T${time}:00`,
+      remindMinutesBefore: remindToNumber(remind),
     });
     setTitle('');
   }
@@ -67,6 +70,20 @@ export default function DayPanel({ date }: { date: string }) {
             <button className="btn primary" onClick={add}>
               添加
             </button>
+          </div>
+          <div className="day-add-times">
+            <span className="day-add-label">提醒</span>
+            <select
+              className="input day-remind-select"
+              value={remind}
+              onChange={(e) => setRemind(e.target.value)}
+            >
+              {REMIND_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="day-hint">到该时刻会弹出系统提醒，并按此刻在日历排序</div>
         </div>

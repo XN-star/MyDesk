@@ -2,6 +2,7 @@ import { useState } from 'react';
 import DatePicker from '../../components/DatePicker';
 import TimeSpinner from '../../components/TimeSpinner';
 import { dateOf } from '../../lib/format';
+import { REMIND_OPTIONS, remindToNumber, remindToString } from '../../lib/remind';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
 
@@ -10,16 +11,6 @@ const PRIORITY_OPTIONS = [
   { value: 1, label: '中' },
   { value: 2, label: '高' },
   { value: 3, label: '紧急' },
-];
-
-const REMIND_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'null', label: '不提醒' },
-  { value: '0', label: '准点提醒' },
-  { value: '5', label: '提前 5 分钟' },
-  { value: '15', label: '提前 15 分钟' },
-  { value: '30', label: '提前 30 分钟' },
-  { value: '60', label: '提前 1 小时' },
-  { value: '1440', label: '提前 1 天' },
 ];
 
 export default function TaskDrawer() {
@@ -36,11 +27,7 @@ export default function TaskDrawer() {
     editing?.dueAt ? editing.dueAt.slice(11, 16) : '09:00',
   );
   const [hasDue, setHasDue] = useState(!!editing?.dueAt);
-  const [remind, setRemind] = useState<string>(
-    editing?.remindMinutesBefore === null || editing?.remindMinutesBefore === undefined
-      ? '0'
-      : String(editing.remindMinutesBefore),
-  );
+  const [remind, setRemind] = useState<string>(remindToString(editing?.remindMinutesBefore ?? 0));
   const [status, setStatus] = useState(
     editing?.status ?? (drawer.mode === 'create' ? drawer.status : 'todo'),
   );
@@ -52,7 +39,7 @@ export default function TaskDrawer() {
 
   function buildRemind(): number | null {
     if (!hasDue || !dueDate) return null;
-    return remind === 'null' ? null : Number(remind);
+    return remindToNumber(remind);
   }
 
   async function save() {

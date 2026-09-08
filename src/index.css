@@ -113,11 +113,15 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .calendar-title { font-weight: 600; }
 /* 实线网格分割 */
 .month-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr); flex: 1; grid-auto-rows: minmax(64px, 1fr);
+  display: grid; grid-template-columns: repeat(7, 1fr); flex: 1;
+  grid-template-rows: 28px repeat(5, minmax(56px, 1fr)) minmax(56px, 1fr);
   border-top: 1px solid var(--border); border-left: 1px solid var(--border);
 }
-.calendar-week { text-align: center; color: var(--muted); padding: 4px 0; border-bottom: 1px solid var(--border); }
-.month-grid .calendar-week { border-right: 1px solid var(--border); background: var(--panel); }
+.calendar-week {
+  text-align: center; line-height: 28px; color: var(--muted);
+  border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  background: var(--panel); padding: 0;
+}
 .calendar-cell {
   border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
   padding: 4px 6px; cursor: pointer; min-height: 48px; display: flex; flex-direction: column; gap: 2px;
@@ -146,6 +150,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .day-add { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .day-add-times { display: flex; gap: 8px; align-items: center; }
 .day-add-label { font-size: 12px; color: var(--muted); flex: none; }
+.day-remind-select { flex: 1; width: auto; }
 .day-hint { font-size: 11px; color: var(--muted); }
 
 .quick { padding: 12px; display: flex; flex-direction: column; gap: 10px; height: 100vh; background: var(--panel); }
@@ -187,7 +192,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .time-spinner { position: relative; }
 .time-btn { min-width: 72px; text-align: center; font-variant-numeric: tabular-nums; }
 .spinner-pop {
-  display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 70;
+  display: none; position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 70;
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,.2); padding: 10px;
 }
