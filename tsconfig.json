@@ -18,7 +18,12 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    /* solarlunar 的 exports 字段未包含 types，显式指向其自带的声明文件 */
+    "paths": {
+      "solarlunar": ["./node_modules/solarlunar/solarlunar.d.ts"]
+    }
   },
   "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]

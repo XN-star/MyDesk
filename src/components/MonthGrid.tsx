@@ -16,10 +16,11 @@ const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
 /** 农历短文案：节气/节日优先，否则「X月Y日」。 */
 export function lunarLabel(d: Date): string {
   const r = solarlunar.solar2lunar(d.getFullYear(), d.getMonth() + 1, d.getDate());
-  if (!r) return '';
-  if (r.termStr) return r.termStr;
-  if (r.festivalStr) return r.festivalStr;
-  return `${r.monthStr}${r.dayStr}`;
+  if (r === -1) return '';
+  if (r.isTerm && r.term) return r.term;
+  const festivals = solarlunar.getFestivals(d.getFullYear(), d.getMonth() + 1, d.getDate());
+  if (festivals.length > 0) return festivals[0];
+  return `${r.monthCn}${r.dayCn}`;
 }
 
 export default function MonthGrid({
