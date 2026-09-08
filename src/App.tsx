@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import Sidebar from './components/Sidebar';
 import TodayBar from './components/TodayBar';
 import Toasts from './components/Toasts';
+import ExitDialog from './components/ExitDialog';
 import TaskDrawer from './features/tasks/TaskDrawer';
 import SettingsPage from './features/settings/SettingsPage';
 import { enabledModules } from './modules/registry';
@@ -17,6 +18,7 @@ export default function App() {
   const drawer = useUiStore((s) => s.drawer);
   const enabled = enabledModules(useSettingsStore((s) => s.enabledModules));
   const theme = useSettingsStore((s) => s.theme);
+  const [showExit, setShowExit] = useState(false);
 
   useEffect(() => {
     useSettingsStore.getState().load().then(() => {
@@ -46,9 +48,13 @@ export default function App() {
       await w.setFocus();
       if (e.payload.type === 'task') useUiStore.getState().openTask(e.payload.id);
     });
+    const un3 = listen('app://close-requested', () => {
+      setShowExit(true);
+    });
     return () => {
       un1.then((f) => f());
       un2.then((f) => f());
+      un3.then((f) => f());
     };
   }, []);
 
@@ -71,6 +77,7 @@ export default function App() {
         </div>
       </div>
       {drawer && <TaskDrawer />}
+      {showExit && <ExitDialog onClose={() => setShowExit(false)} />}
       <Toasts />
     </div>
   );

@@ -1,6 +1,6 @@
 use crate::{Db, Notified};
 use chrono::NaiveDateTime;
-use rusqlite::{params, Connection};
+use rusqlite::Connection;
 use std::time::Duration;
 use tauri::{Manager, State};
 use tauri_plugin_notification::NotificationExt;

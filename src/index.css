@@ -86,6 +86,11 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .toast { background: var(--panel); border: 1px solid var(--border); border-left: 4px solid var(--accent); padding: 10px 14px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.15); }
 .toast.error { border-left-color: var(--danger); }
 .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; justify-content: flex-end; z-index: 50; }
+.overlay.center { justify-content: center; align-items: center; }
+.dialog { width: 420px; padding: 20px; display: flex; flex-direction: column; gap: 12px; border-radius: 12px; }
+.dialog h3 { margin: 0; }
+.dialog p { margin: 0; line-height: 1.6; }
+.dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 .drawer { width: 380px; background: var(--panel); border-left: 1px solid var(--border); padding: 20px; display: flex; flex-direction: column; gap: 12px; }
 .drawer h3 { margin: 0; }
 .field { display: flex; flex-direction: column; gap: 4px; }
@@ -188,15 +193,13 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .picker-head { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 6px; }
 .picker-head .btn { padding: 2px 10px; }
 
-/* 时间滚轮（弹层式） */
-.time-spinner { position: relative; }
+/* 时间滚轮（portal + fixed 弹层） */
 .time-btn { min-width: 72px; text-align: center; font-variant-numeric: tabular-nums; }
 .spinner-pop {
-  display: none; position: absolute; bottom: calc(100% + 6px); right: 0; z-index: 70;
+  position: fixed; z-index: 200;
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0,0,0,.2); padding: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35); padding: 10px;
 }
-.time-spinner.open .spinner-pop { display: block; }
 .spinner-pop-body { display: flex; gap: 10px; }
 .spinner-col { display: flex; flex-direction: column; align-items: center; gap: 2px; }
 .spinner-arrow { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 9px; padding: 1px 10px; cursor: pointer; color: var(--muted); }

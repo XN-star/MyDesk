@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = Array.from({ length: 60 }, (_, i) => i);
@@ -64,7 +65,10 @@ function Column({
   );
 }
 
-/** 时间选择：按钮显示 HH:MM，点击弹出滚轮弹层；点外部关闭。 */
+const POP_HEIGHT = 180;
+const POP_WIDTH = 140;
+
+/** 时间选择：按钮显示 HH:MM，点击经 portal 弹出滚轮弹层（fixed 定位，自动避开屏幕边缘）。 */
 export default function TimeSpinner({
   value,
   onChange,
@@ -75,21 +79,32 @@ export default function TimeSpinner({
   const [hStr, mStr] = value.split(':');
   const h = Number(hStr);
   const m = Number(mStr);
-  const boxRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
-  useEffect(() => {
-    function onDoc(e: MouseEvent) {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
-        boxRef.current?.classList.remove('open');
-      }
-    }
+  function open() {
+    const rect = btnRef.current!.getBoundingClientRect();
+    const below = rect.bottom + 6;
+    // 下方放得下就向下弹，否则向上弹；left 与按钮右对齐并夹紧到视口内。
+    const top =
+      below + POP_HEIGHT <= window.innerHeight
+        ? below
+        : Math.max(rect.top - 6 - POP_HEIGHT, 8);
+    const left = Math.max(Math.min(rect.right - POP_WIDTH, window.innerWidth - POP_WIDTH - 8), 8);
+    setPos({ top, left });
+  }
+
+  useLayoutEffect(() => {
+    if (!pos || !popRef.current) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (popRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setPos(null);
+    };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
-  }, []);
-
-  function togglePop() {
-    boxRef.current?.classList.toggle('open');
-  }
+  }, [pos]);
 
   function setHour(h2: number) {
     onChange(`${pad(h2)}:${pad(Number.isNaN(m) ? 0 : m)}`);
@@ -99,21 +114,30 @@ export default function TimeSpinner({
   }
 
   return (
-    <div className="time-spinner" ref={boxRef}>
-      <button type="button" className="btn picker-btn time-btn" onClick={togglePop}>
+    <>
+      <button
+        type="button"
+        ref={btnRef}
+        className="btn picker-btn time-btn"
+        onClick={() => (pos ? setPos(null) : open())}
+      >
         {Number.isNaN(h) || Number.isNaN(m) ? '--:--' : `${pad(h)}:${pad(m)}`}
       </button>
-      <div className="spinner-pop">
-        <div className="spinner-pop-body">
-          <Column values={HOURS} current={Number.isNaN(h) ? 9 : h} onChange={setHour} label="时" />
-          <Column
-            values={MINUTES}
-            current={Number.isNaN(m) ? 0 : m}
-            onChange={setMinute}
-            label="分"
-          />
-        </div>
-      </div>
-    </div>
+      {pos &&
+        createPortal(
+          <div className="spinner-pop" ref={popRef} style={{ top: pos.top, left: pos.left }}>
+            <div className="spinner-pop-body">
+              <Column values={HOURS} current={Number.isNaN(h) ? 9 : h} onChange={setHour} label="时" />
+              <Column
+                values={MINUTES}
+                current={Number.isNaN(m) ? 0 : m}
+                onChange={setMinute}
+                label="分"
+              />
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }

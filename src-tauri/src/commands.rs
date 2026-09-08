@@ -119,6 +119,13 @@ pub fn settings_set(db: DbState, key: String, value: String) -> Result<(), Strin
 }
 
 #[tauri::command]
+pub fn quit_app(app: tauri::AppHandle) -> Result<(), String> {
+    app.exit(0);
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
+#[tauri::command]
 pub fn backup_export(db: DbState, path: String) -> Result<(), String> {
     let conn = db.0.lock().map_err(|e| e.to_string())?;
     crate::backup::export(&conn, std::path::Path::new(&path)).map_err(|e| e.to_string())
