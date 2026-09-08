@@ -1,14 +1,14 @@
 {
   "schemaVersion": "mimosa-hook-status/v1",
-  "recordedAt": "2026-09-08T01:21:37.378Z",
+  "recordedAt": "2026-09-08T02:22:17.156Z",
   "sessionId": "sess_0efb4f4f-41b6-48cd-967f-cbb54aa623ea",
   "event": "PostToolUse",
   "toolName": "Edit",
-  "file": "src/lib.rs",
+  "file": "src/backup.rs",
   "outcome": "clear",
   "coverage": "complete",
   "findingCount": 0,
-  "durationMs": 14,
+  "durationMs": 13,
   "hostState": "hook_complete",
   "reportHint": ".mimosa/reports/"
 }

@@ -43,6 +43,7 @@ pub fn task_create(db: DbState, input: TaskInput) -> Result<Task, String> {
             due_at: input.due_at,
             sort_order: max + 100.0,
             done_at: None,
+            remind_minutes_before: input.remind_minutes_before,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -58,6 +59,7 @@ pub fn task_create(db: DbState, input: TaskInput) -> Result<Task, String> {
                 t.due_at,
                 t.sort_order,
                 t.done_at,
+                t.remind_minutes_before,
                 t.created_at,
                 t.updated_at
             ],
@@ -70,7 +72,7 @@ pub fn task_create(db: DbState, input: TaskInput) -> Result<Task, String> {
 pub fn task_update(db: DbState, task: Task) -> Result<Task, String> {
     with_conn(db, move |c| {
         c.execute(
-            "UPDATE tasks SET board_id=?2, title=?3, description=?4, status=?5, priority=?6, due_at=?7, sort_order=?8, done_at=?9, updated_at=?10 WHERE id=?1",
+            "UPDATE tasks SET board_id=?2, title=?3, description=?4, status=?5, priority=?6, due_at=?7, sort_order=?8, done_at=?9, remind_minutes_before=?10, updated_at=?11 WHERE id=?1",
             params![
                 task.id,
                 task.board_id,
@@ -81,6 +83,7 @@ pub fn task_update(db: DbState, task: Task) -> Result<Task, String> {
                 task.due_at,
                 task.sort_order,
                 task.done_at,
+                task.remind_minutes_before,
                 now_iso()
             ],
         )?;

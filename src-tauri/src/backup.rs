@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-pub const VERSION: i64 = 2;
+pub const VERSION: i64 = 3;
 
 pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let tasks = query_all_tasks(conn)?;
@@ -31,6 +31,16 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     }
     let tasks: Vec<Task> = serde_json::from_value(doc.get("tasks").cloned().unwrap_or_default())
         .context("tasks 字段缺失或格式错误")?;
+    // 旧版备份无 remindMinutesBefore 字段，统一补为「准点提醒」。
+    let tasks: Vec<Task> = tasks
+        .into_iter()
+        .map(|mut t| {
+            if t.remind_minutes_before.is_none() && t.due_at.is_some() {
+                t.remind_minutes_before = Some(0);
+            }
+            t
+        })
+        .collect();
     let settings: Vec<SettingRow> =
         serde_json::from_value(doc.get("settings").cloned().unwrap_or_default())
             .context("settings 字段缺失或格式错误")?;
@@ -85,6 +95,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
                 due_at: Some(due_at),
                 sort_order: 100.0,
                 done_at: None,
+                remind_minutes_before: Some(0),
                 created_at: created.clone(),
                 updated_at: created,
             });
@@ -107,6 +118,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
                 t.due_at,
                 t.sort_order,
                 t.done_at,
+                t.remind_minutes_before,
                 t.created_at,
                 t.updated_at
             ],
@@ -132,15 +144,15 @@ mod tests {
     }
 
     fn seed(c: &rusqlite::Connection) {
-        c.execute(TASK_INSERT, params!["t1", "default", "任务A", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["t1", "default", "任务A", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(0), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         c.execute(SETTING_INSERT, params!["theme", "\"dark\""]).unwrap();
     }
 
     #[test]
-    fn export_then_import_roundtrip_v2() {
+    fn export_then_import_roundtrip_v3() {
         let src = mem();
         seed(&src);
-        let file = std::env::temp_dir().join(format!("ws-bk2-{}.json", std::process::id()));
+        let file = std::env::temp_dir().join(format!("ws-bk3-{}.json", std::process::id()));
         export(&src, &file).unwrap();
 
         let mut dst = mem();
@@ -151,7 +163,20 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 2);
+        assert_eq!(doc["version"], 3);
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_preserves_remind_field() {
+        let src = mem();
+        src.execute(TASK_INSERT, params!["t2", "default", "提前提醒任务", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(30), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-remind-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+        let mut dst = mem();
+        import(&mut dst, &file).unwrap();
+        let t = query_all_tasks(&dst).unwrap();
+        assert_eq!(t[0].remind_minutes_before, Some(30));
         std::fs::remove_file(&file).ok();
     }
 
@@ -181,6 +206,7 @@ mod tests {
         assert_eq!(tasks.len(), 3);
         let ev1 = tasks.iter().find(|t| t.id == "e1").unwrap();
         assert_eq!(ev1.due_at.as_deref(), Some("2026-09-08T15:00:00"));
+        assert_eq!(ev1.remind_minutes_before, Some(0), "v1 转换默认准点提醒");
         let ev2 = tasks.iter().find(|t| t.id == "e2").unwrap();
         assert_eq!(ev2.due_at.as_deref(), Some("2026-09-09T09:00:00"));
         std::fs::remove_file(&file).ok();
@@ -191,7 +217,7 @@ mod tests {
         let file = std::env::temp_dir().join(format!("ws-bk-bad-{}.json", std::process::id()));
         std::fs::write(&file, r#"{"version": 99, "tasks": []}"#).unwrap();
         let mut c = mem();
-        c.execute(TASK_INSERT, params!["keep", "default", "保留", "", "todo", 1, None::<String>, 100.0, None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["keep", "default", "保留", "", "todo", 1, None::<String>, 100.0, None::<String>, Some(0), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         let err = import(&mut c, &file).unwrap_err();
         assert!(err.to_string().contains("不支持的备份版本"));
         assert_eq!(query_all_tasks(&c).unwrap().len(), 1, "校验失败必须零写入");

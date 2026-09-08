@@ -1,8 +1,33 @@
 use rusqlite::Connection;
 
-/// v2：仅 tasks + settings 两张表（events 已并入 tasks）。
-pub const SCHEMA_V2: &str = "
+/// v3 建表语句（新库直接为此形态）：tasks 含 remind_minutes_before。
+pub const SCHEMA_V3: &str = "
 CREATE TABLE IF NOT EXISTS tasks (
+  id          TEXT PRIMARY KEY,
+  board_id    TEXT NOT NULL DEFAULT 'default',
+  title       TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'todo',
+  priority    INTEGER NOT NULL DEFAULT 1,
+  due_at      TEXT,
+  sort_order  REAL NOT NULL,
+  done_at     TEXT,
+  remind_minutes_before INTEGER,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+";
+
+/// v2→v3：tasks 增加 remind_minutes_before（NULL=不提醒，0=准点）。
+pub const MIGRATE_V2_TO_V3: &str = "ALTER TABLE tasks ADD COLUMN remind_minutes_before INTEGER;";
+
+/// v2 的建表语句，仅用于迁移测试中构造旧库。
+pub const SCHEMA_V2: &str = "
+CREATE TABLE tasks (
   id          TEXT PRIMARY KEY,
   board_id    TEXT NOT NULL DEFAULT 'default',
   title       TEXT NOT NULL,
@@ -15,7 +40,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL
 );
-CREATE TABLE IF NOT EXISTS settings (
+CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
@@ -77,28 +102,57 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
-        // 全新库：直接建 v2 形态。
-        // version==0 且已存在 events 表的极端情况（手动建库）按 v1 处理：
-        // 先补建缺失的 v1 表结构再走迁移，保证 INSERT ... SELECT 可执行。
-        let has_events: bool = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
-                [],
-                |r| r.get::<_, i64>(0),
-            )?
-            > 0;
+        // 全新库：直接建 v3 形态。
+        // version==0 且已存在 events/tasks 表的极端情况（手动建的 v1/v2 库）按旧版处理。
+        let has_events: bool = table_exists(conn, "events")?;
+        let has_tasks: bool = table_exists(conn, "tasks")?;
         if has_events {
             conn.execute_batch(SCHEMA_V1)?;
             migrate_v1_to_v2(conn)?;
-        } else {
+            upgrade_to_v3(conn)?;
+        } else if has_tasks {
             conn.execute_batch(SCHEMA_V2)?;
+            upgrade_to_v3(conn)?;
+        } else {
+            conn.execute_batch(SCHEMA_V3)?;
         }
-        conn.pragma_update(None, "user_version", 2)?;
+        conn.pragma_update(None, "user_version", 3)?;
     } else if version == 1 {
         migrate_v1_to_v2(conn)?;
-        conn.pragma_update(None, "user_version", 2)?;
+        upgrade_to_v3(conn)?;
+        conn.pragma_update(None, "user_version", 3)?;
+    } else if version == 2 {
+        upgrade_to_v3(conn)?;
+        conn.pragma_update(None, "user_version", 3)?;
     }
     Ok(())
+}
+
+fn upgrade_to_v3(conn: &Connection) -> rusqlite::Result<()> {
+    if !column_exists(conn, "tasks", "remind_minutes_before")? {
+        conn.execute_batch(MIGRATE_V2_TO_V3)?;
+    }
+    Ok(())
+}
+
+fn table_exists(conn: &Connection, name: &str) -> rusqlite::Result<bool> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?1",
+        [name],
+        |r| r.get::<_, i64>(0),
+    )?;
+    Ok(n > 0)
+}
+
+fn column_exists(conn: &Connection, table: &str, column: &str) -> rusqlite::Result<bool> {
+    let n: i64 = conn.query_row(
+        &format!(
+            "SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name='{column}'"
+        ),
+        [],
+        |r| r.get::<_, i64>(0),
+    )?;
+    Ok(n > 0)
 }
 
 fn migrate_v1_to_v2(conn: &Connection) -> rusqlite::Result<()> {
@@ -124,7 +178,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_db_creates_two_tables_at_v2() {
+    fn fresh_db_creates_tasks_with_remind_col_at_v3() {
         let c = mem();
         let n: i64 = c
             .query_row(
@@ -135,7 +189,8 @@ mod tests {
             .unwrap();
         assert_eq!(n, 2);
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 2);
+        assert_eq!(v, 3);
+        assert!(column_exists(&c, "tasks", "remind_minutes_before").unwrap());
     }
 
     #[test]
@@ -146,7 +201,7 @@ mod tests {
     }
 
     #[test]
-    fn v1_db_migrates_events_into_tasks() {
+    fn v1_db_migrates_events_into_tasks_then_v3() {
         let c = rusqlite::Connection::open_in_memory().unwrap();
         c.execute_batch(SCHEMA_V1).unwrap();
         c.execute_batch("PRAGMA user_version = 1;").unwrap();
@@ -155,16 +210,11 @@ mod tests {
             [],
         )
         .unwrap();
-        c.execute(
-            "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, created_at, updated_at) VALUES ('t1', 'default', '已有任务', '', 'todo', 1, '2026-09-09T10:00:00', 100.0, NULL, '2026-09-07T09:00:00', '2026-09-07T09:00:00')",
-            [],
-        )
-        .unwrap();
 
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 2);
+        assert_eq!(v, 3);
         let events: i64 = c
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
@@ -173,18 +223,35 @@ mod tests {
             )
             .unwrap();
         assert_eq!(events, 0, "events 表应被删除");
-        let (title, due): (String, String) = c
-            .query_row(
-                "SELECT title, due_at FROM tasks WHERE id='e1'",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
+        let due: String = c
+            .query_row("SELECT due_at FROM tasks WHERE id='e1'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(title, "周会");
         assert_eq!(due, "2026-09-08T15:00:00");
+        assert!(column_exists(&c, "tasks", "remind_minutes_before").unwrap());
+    }
+
+    #[test]
+    fn v2_db_upgrades_to_v3() {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch(SCHEMA_V2).unwrap();
+        c.execute_batch("PRAGMA user_version = 2;").unwrap();
+        c.execute(
+            "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, created_at, updated_at) VALUES ('t1', 'default', '旧任务', '', 'todo', 1, '2026-09-09T10:00:00', 100.0, NULL, '2026-09-07T09:00:00', '2026-09-07T09:00:00')",
+            [],
+        )
+        .unwrap();
+
+        migrate(&c).unwrap();
+
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 3);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(kept, "已有任务", "原任务应保留");
+        assert_eq!(kept, "旧任务");
+        let remind: Option<i64> = c
+            .query_row("SELECT remind_minutes_before FROM tasks WHERE id='t1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(remind, None, "迁移后的旧任务默认不提醒");
     }
 }

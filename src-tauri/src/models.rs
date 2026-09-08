@@ -1,9 +1,8 @@
 use rusqlite::{Connection, Row};
 use serde::{Deserialize, Serialize};
 
-pub const TASK_COLS: &str =
-    "id, board_id, title, description, status, priority, due_at, sort_order, done_at, created_at, updated_at";
-pub const TASK_INSERT: &str = "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)";
+pub const TASK_COLS: &str = "id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at";
+pub const TASK_INSERT: &str = "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)";
 pub const SETTING_INSERT: &str = "INSERT INTO settings (key, value) VALUES (?1, ?2)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,6 +17,8 @@ pub struct Task {
     pub due_at: Option<String>,
     pub sort_order: f64,
     pub done_at: Option<String>,
+    /// 提前提醒分钟数：None=不提醒，0=准点，n=提前 n 分钟。
+    pub remind_minutes_before: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -34,6 +35,8 @@ pub struct TaskInput {
     pub due_at: Option<String>,
     #[serde(default = "dft_status")]
     pub status: String,
+    #[serde(default = "dft_remind")]
+    pub remind_minutes_before: Option<i64>,
 }
 
 fn dft_priority() -> i64 {
@@ -41,6 +44,9 @@ fn dft_priority() -> i64 {
 }
 fn dft_status() -> String {
     "todo".into()
+}
+fn dft_remind() -> Option<i64> {
+    Some(0)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,8 +66,9 @@ pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
         due_at: r.get(6)?,
         sort_order: r.get(7)?,
         done_at: r.get(8)?,
-        created_at: r.get(9)?,
-        updated_at: r.get(10)?,
+        remind_minutes_before: r.get(9)?,
+        created_at: r.get(10)?,
+        updated_at: r.get(11)?,
     })
 }
 
@@ -96,13 +103,14 @@ mod tests {
     #[test]
     fn task_roundtrip_via_row_mapping() {
         let c = mem();
-        c.execute(TASK_INSERT, params!["t1", "default", "写报告", "周报", "todo", 2, "2026-09-08T10:00:00", 100.0, None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["t1", "default", "写报告", "周报", "todo", 2, "2026-09-08T10:00:00", 100.0, None::<String>, Some(15), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         let got = query_all_tasks(&c).unwrap();
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].title, "写报告");
         assert_eq!(got[0].due_at.as_deref(), Some("2026-09-08T10:00:00"));
         assert_eq!(got[0].priority, 2);
         assert_eq!(got[0].board_id, "default");
+        assert_eq!(got[0].remind_minutes_before, Some(15));
     }
 
     #[test]
@@ -112,5 +120,13 @@ mod tests {
         assert_eq!(input.priority, 1);
         assert_eq!(input.status, "todo");
         assert_eq!(input.due_at, None);
+        assert_eq!(input.remind_minutes_before, Some(0), "默认准点提醒");
+    }
+
+    #[test]
+    fn task_input_remind_null() {
+        let json = r#"{"title":"静默任务","remindMinutesBefore":null}"#;
+        let input: TaskInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.remind_minutes_before, None);
     }
 }
