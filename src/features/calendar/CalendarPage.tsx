@@ -46,7 +46,13 @@ export default function CalendarPage() {
             ›
           </button>
         </div>
-        <MonthGrid month={month} selectedDate={selected} onPick={setSelected} renderDots={renderDots} />
+        <MonthGrid
+          month={month}
+          selectedDate={selected}
+          onPick={setSelected}
+          renderDots={renderDots}
+          showLunar
+        />
       </div>
       <DayPanel date={selected} />
     </div>

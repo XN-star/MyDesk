@@ -12,6 +12,16 @@ const PRIORITY_OPTIONS = [
   { value: 3, label: '紧急' },
 ];
 
+const REMIND_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'null', label: '不提醒' },
+  { value: '0', label: '准点提醒' },
+  { value: '5', label: '提前 5 分钟' },
+  { value: '15', label: '提前 15 分钟' },
+  { value: '30', label: '提前 30 分钟' },
+  { value: '60', label: '提前 1 小时' },
+  { value: '1440', label: '提前 1 天' },
+];
+
 export default function TaskDrawer() {
   const drawer = useUiStore((s) => s.drawer)!;
   const { closeDrawer, toast } = useUiStore();
@@ -26,6 +36,11 @@ export default function TaskDrawer() {
     editing?.dueAt ? editing.dueAt.slice(11, 16) : '09:00',
   );
   const [hasDue, setHasDue] = useState(!!editing?.dueAt);
+  const [remind, setRemind] = useState<string>(
+    editing?.remindMinutesBefore === null || editing?.remindMinutesBefore === undefined
+      ? '0'
+      : String(editing.remindMinutesBefore),
+  );
   const [status, setStatus] = useState(
     editing?.status ?? (drawer.mode === 'create' ? drawer.status : 'todo'),
   );
@@ -35,6 +50,11 @@ export default function TaskDrawer() {
     return `${dueDate}T${dueTime}:00`;
   }
 
+  function buildRemind(): number | null {
+    if (!hasDue || !dueDate) return null;
+    return remind === 'null' ? null : Number(remind);
+  }
+
   async function save() {
     if (!title.trim()) {
       toast('标题不能为空', 'error');
@@ -42,6 +62,7 @@ export default function TaskDrawer() {
     }
     try {
       const dueAt = buildDueAt();
+      const remindMinutesBefore = buildRemind();
       if (drawer.mode === 'create') {
         await create({
           title: title.trim(),
@@ -49,6 +70,7 @@ export default function TaskDrawer() {
           priority,
           dueAt,
           status,
+          remindMinutesBefore,
         });
       } else if (editing) {
         await update({
@@ -58,6 +80,7 @@ export default function TaskDrawer() {
           priority,
           dueAt,
           status,
+          remindMinutesBefore,
         });
       }
       toast('已保存');
@@ -123,6 +146,24 @@ export default function TaskDrawer() {
             </div>
           )}
         </div>
+        {hasDue && (
+          <div className="field">
+            <label>提醒</label>
+            <select
+              className="input"
+              value={remind}
+              onChange={(e) => setRemind(e.target.value)}
+              disabled={!dueDate}
+              title={!dueDate ? '请先选择日期' : undefined}
+            >
+              {REMIND_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="field">
           <label>状态</label>
           <select className="input" value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>

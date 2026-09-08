@@ -13,6 +13,7 @@ function t(id: string, status: Task['status'], sortOrder: number): Task {
     dueAt: null,
     sortOrder,
     doneAt: null,
+    remindMinutesBefore: null,
     createdAt: '',
     updatedAt: '',
   };

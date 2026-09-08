@@ -10,7 +10,7 @@ export default function Sidebar() {
     <nav className="sidebar">
       <div className="brand">
         <span className="brand-icon">◆</span>
-        <span className="brand-name">个人工作台</span>
+        <span className="brand-name">MyDesk</span>
       </div>
       {enabled.map((m) => (
         <button

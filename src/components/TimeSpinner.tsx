@@ -19,44 +19,32 @@ function Column({
   label: string;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
-  const programmatic = useRef(false);
-
-  function scrollToDate(v: number, smooth = false) {
-    const el = listRef.current;
-    if (!el) return;
-    const item = el.querySelector<HTMLElement>(`[data-v="${v}"]`);
-    if (item) {
-      programmatic.current = true;
-      item.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' });
-      setTimeout(() => (programmatic.current = false), 200);
-    }
-  }
 
   useEffect(() => {
-    scrollToDate(current);
+    const el = listRef.current;
+    if (!el) return;
+    const item = el.querySelector<HTMLElement>(`[data-v="${current}"]`);
+    item?.scrollIntoView({ block: 'center' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  function shift(delta: number) {
+    const idx = values.indexOf(current);
+    const next = idx + delta;
+    if (next >= 0 && next < values.length) onChange(values[next]);
+  }
+
   function onWheel(e: React.WheelEvent) {
     e.preventDefault();
-    const idx = values.indexOf(current);
-    const next = e.deltaY > 0 ? idx + 1 : idx - 1;
-    if (next >= 0 && next < values.length) onChange(values[next]);
+    shift(e.deltaY > 0 ? 1 : -1);
   }
 
   return (
     <div className="spinner-col">
-      <button type="button" className="spinner-arrow" onClick={() => {
-        const idx = values.indexOf(current);
-        if (idx > 0) onChange(values[idx - 1]);
-      }}>
+      <button type="button" className="spinner-arrow" onClick={() => shift(-1)}>
         ▲
       </button>
-      <div
-        className="spinner-list"
-        ref={listRef}
-        onWheel={onWheel}
-      >
+      <div className="spinner-list" ref={listRef} onWheel={onWheel}>
         {values.map((v) => (
           <div
             key={v}
@@ -68,10 +56,7 @@ function Column({
           </div>
         ))}
       </div>
-      <button type="button" className="spinner-arrow" onClick={() => {
-        const idx = values.indexOf(current);
-        if (idx < values.length - 1) onChange(values[idx + 1]);
-      }}>
+      <button type="button" className="spinner-arrow" onClick={() => shift(1)}>
         ▼
       </button>
       <span className="spinner-label">{label}</span>
@@ -79,6 +64,7 @@ function Column({
   );
 }
 
+/** 时间选择：按钮显示 HH:MM，点击弹出滚轮弹层；点外部关闭。 */
 export default function TimeSpinner({
   value,
   onChange,
@@ -86,7 +72,24 @@ export default function TimeSpinner({
   value: string; // HH:MM
   onChange: (v: string) => void;
 }) {
-  const [h, m] = value.split(':').map(Number);
+  const [hStr, mStr] = value.split(':');
+  const h = Number(hStr);
+  const m = Number(mStr);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
+        boxRef.current?.classList.remove('open');
+      }
+    }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  function togglePop() {
+    boxRef.current?.classList.toggle('open');
+  }
 
   function setHour(h2: number) {
     onChange(`${pad(h2)}:${pad(Number.isNaN(m) ? 0 : m)}`);
@@ -96,9 +99,21 @@ export default function TimeSpinner({
   }
 
   return (
-    <div className="time-spinner">
-      <Column values={HOURS} current={Number.isNaN(h) ? 9 : h} onChange={setHour} label="时" />
-      <Column values={MINUTES} current={Number.isNaN(m) ? 0 : m} onChange={setMinute} label="分" />
+    <div className="time-spinner" ref={boxRef}>
+      <button type="button" className="btn picker-btn time-btn" onClick={togglePop}>
+        {Number.isNaN(h) || Number.isNaN(m) ? '--:--' : `${pad(h)}:${pad(m)}`}
+      </button>
+      <div className="spinner-pop">
+        <div className="spinner-pop-body">
+          <Column values={HOURS} current={Number.isNaN(h) ? 9 : h} onChange={setHour} label="时" />
+          <Column
+            values={MINUTES}
+            current={Number.isNaN(m) ? 0 : m}
+            onChange={setMinute}
+            label="分"
+          />
+        </div>
+      </div>
     </div>
   );
 }

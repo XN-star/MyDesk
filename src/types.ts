@@ -10,6 +10,8 @@ export interface Task {
   dueAt: string | null;
   sortOrder: number;
   doneAt: string | null;
+  /** 提前提醒分钟数：null=不提醒，0=准点，n=提前 n 分钟 */
+  remindMinutesBefore: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -20,4 +22,5 @@ export interface TaskInput {
   priority?: number;
   dueAt?: string | null;
   status?: TaskStatus;
+  remindMinutesBefore?: number | null;
 }
