@@ -1,0 +1,30 @@
+import type { Note } from '../../types';
+
+/** 标题+内容不区分大小写包含匹配；关键字为空白时返回全部。 */
+export function searchNotes(notes: Note[], keyword: string): Note[] {
+  const k = keyword.trim().toLowerCase();
+  if (!k) return notes;
+  return notes.filter(
+    (n) => n.title.toLowerCase().includes(k) || n.content.toLowerCase().includes(k),
+  );
+}
+
+/** 依赖后端已排序的输入，保持组内顺序拆为 [置顶, 其余]。 */
+export function splitPinned(notes: Note[]): [Note[], Note[]] {
+  return [notes.filter((n) => n.pinned), notes.filter((n) => !n.pinned)];
+}
+
+/** 列表摘要：首个非空行，超 40 字截断加省略号。 */
+export function noteExcerpt(content: string): string {
+  const line = content.split('\n').find((l) => l.trim() !== '') ?? '';
+  const s = line.trim();
+  return s.length > 40 ? s.slice(0, 40) + '…' : s;
+}
+
+/** 本地更新后维持与后端一致的顺序：置顶在前，其余按更新时间倒序。 */
+export function sortNotes(notes: Note[]): Note[] {
+  return [...notes].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return b.updatedAt.localeCompare(a.updatedAt);
+  });
+}
