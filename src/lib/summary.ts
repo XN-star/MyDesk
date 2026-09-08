@@ -1,9 +1,9 @@
-import type { EventItem, Task } from '../types';
+import type { Task } from '../types';
 import { fromDate } from './format';
 
 export interface DaySummary {
   todoCount: number;
-  eventCount: number;
+  todayCount: number;
   nextLabel: string;
 }
 
@@ -18,17 +18,12 @@ function dueLabelOf(iso: string, now: Date): string {
   return `${Math.round(hours / 24)}天后`;
 }
 
-export function summarize(
-  tasks: Task[],
-  events: EventItem[],
-  today: string,
-  now: Date = new Date(),
-): DaySummary {
+export function summarize(tasks: Task[], today: string, now: Date = new Date()): DaySummary {
   const todoCount = tasks.filter((t) => t.status !== 'done').length;
-  const eventCount = events.filter((e) => e.date === today).length;
+  const todayCount = tasks.filter((t) => t.dueAt?.slice(0, 10) === today).length;
   const next = tasks
     .filter((t) => t.status !== 'done' && t.dueAt && t.dueAt >= fromDate(now))
     .sort((a, b) => a.dueAt!.localeCompare(b.dueAt!))[0];
   const nextLabel = next?.dueAt ? dueLabelOf(next.dueAt, now) : '无';
-  return { todoCount, eventCount, nextLabel };
+  return { todoCount, todayCount, nextLabel };
 }

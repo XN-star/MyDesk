@@ -3,32 +3,27 @@ import type React from 'react';
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { api } from '../../lib/api';
-import { toDateStr } from '../../lib/format';
-import type { EventItem, Task } from '../../types';
+import type { Task } from '../../types';
 import { parseQuickTask } from './parseQuickTask';
 
 interface Hit {
-  type: 'task' | 'event';
+  type: 'task';
   id: string;
   label: string;
 }
 
-function search(q: string, tasks: Task[], events: EventItem[]): Hit[] {
+function search(q: string, tasks: Task[]): Hit[] {
   const s = q.trim().toLowerCase();
   if (!s) return [];
-  const t = tasks
+  return tasks
     .filter((x) => x.title.toLowerCase().includes(s))
-    .map((x) => ({ type: 'task' as const, id: x.id, label: x.title }));
-  const e = events
-    .filter((x) => x.title.toLowerCase().includes(s))
-    .map((x) => ({ type: 'event' as const, id: x.id, label: x.title }));
-  return [...t, ...e].slice(0, 8);
+    .map((x) => ({ type: 'task' as const, id: x.id, label: x.title }))
+    .slice(0, 8);
 }
 
 export default function QuickWindow() {
   const [q, setQ] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [events, setEvents] = useState<EventItem[]>([]);
   const [sel, setSel] = useState(0);
   const [notice, setNotice] = useState('');
 
@@ -37,13 +32,9 @@ export default function QuickWindow() {
       .taskList()
       .then(setTasks)
       .catch(() => {});
-    api
-      .eventListDate(toDateStr(new Date()))
-      .then(setEvents)
-      .catch(() => {});
   }, []);
 
-  const hits = useMemo(() => search(q, tasks, events), [q, tasks, events]);
+  const hits = useMemo(() => search(q, tasks), [q, tasks]);
 
   async function hide() {
     await getCurrentWindow().hide();
@@ -101,11 +92,11 @@ export default function QuickWindow() {
       <div className="quick-results">
         {hits.map((h, i) => (
           <div
-            key={`${h.type}-${h.id}`}
+            key={h.id}
             className={`quick-item${i === sel ? ' active' : ''}`}
             onClick={() => void openHit(h)}
           >
-            <span className="quick-tag">{h.type === 'task' ? '任务' : '日程'}</span>
+            <span className="quick-tag">任务</span>
             {h.label}
           </div>
         ))}

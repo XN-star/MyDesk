@@ -1,43 +1,35 @@
-import { useMemo, useState } from 'react';
-import {
-  eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
-  isSameDay,
-  isSameMonth,
-  startOfMonth,
-  startOfWeek,
-} from 'date-fns';
+import { useState } from 'react';
+import MonthGrid from '../../components/MonthGrid';
 import { toDateStr } from '../../lib/format';
-import { useEventStore } from '../../stores/events';
 import { useTaskStore } from '../../stores/tasks';
-import { eventsForDate, tasksForDate } from './selectors';
+import { tasksForDate } from './selectors';
 import DayPanel from './DayPanel';
 
-const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日'];
+const DOT_LIMIT = 6;
 
 export default function CalendarPage() {
   const [month, setMonth] = useState(() => new Date());
   const [selected, setSelected] = useState(() => toDateStr(new Date()));
   const tasks = useTaskStore((s) => s.tasks);
-  const events = useEventStore((s) => s.events);
-
-  const days = useMemo(
-    () =>
-      eachDayOfInterval({
-        start: startOfWeek(startOfMonth(month), { weekStartsOn: 1 }),
-        end: endOfWeek(endOfMonth(month), { weekStartsOn: 1 }),
-      }),
-    [month],
-  );
 
   function shiftMonth(delta: number) {
     const next = new Date(month);
     next.setMonth(next.getMonth() + delta);
     setMonth(next);
-    useEventStore
-      .getState()
-      .loadMonth(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`);
+  }
+
+  function renderDots(ds: string) {
+    const dayTasks = tasksForDate(ds, tasks);
+    if (dayTasks.length === 0) return null;
+    const shown = dayTasks.slice(0, DOT_LIMIT);
+    return (
+      <div className="cell-dots">
+        {shown.map((t) => (
+          <span key={t.id} className={`tdot p${t.priority}${t.status === 'done' ? ' done' : ''}`} />
+        ))}
+        {dayTasks.length > DOT_LIMIT && <span className="cell-more">+{dayTasks.length - DOT_LIMIT}</span>}
+      </div>
+    );
   }
 
   return (
@@ -54,45 +46,7 @@ export default function CalendarPage() {
             ›
           </button>
         </div>
-        <div className="calendar-grid">
-          {WEEK_LABELS.map((w) => (
-            <div key={w} className="calendar-week">
-              {w}
-            </div>
-          ))}
-          {days.map((d) => {
-            const ds = toDateStr(d);
-            const dayTasks = tasksForDate(ds, tasks);
-            const dayEvents = eventsForDate(ds, events);
-            const isToday = isSameDay(d, new Date());
-            return (
-              <div
-                key={ds}
-                className={[
-                  'calendar-cell',
-                  isSameMonth(d, month) ? '' : 'dim',
-                  ds === selected ? 'selected' : '',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-                onClick={() => setSelected(ds)}
-              >
-                <div className={`cell-num${isToday ? ' today' : ''}`}>{d.getDate()}</div>
-                <div className="cell-dots">
-                  {dayTasks.slice(0, 4).map((t) => (
-                    <span
-                      key={t.id}
-                      className={`tdot p${t.priority}${t.status === 'done' ? ' done' : ''}`}
-                    />
-                  ))}
-                  {dayEvents.slice(0, 4).map((e) => (
-                    <span key={e.id} className="edot" />
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <MonthGrid month={month} selectedDate={selected} onPick={setSelected} renderDots={renderDots} />
       </div>
       <DayPanel date={selected} />
     </div>

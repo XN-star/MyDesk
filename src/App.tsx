@@ -8,7 +8,6 @@ import TaskDrawer from './features/tasks/TaskDrawer';
 import SettingsPage from './features/settings/SettingsPage';
 import { enabledModules } from './modules/registry';
 import { applyTheme } from './lib/theme';
-import { useEventStore } from './stores/events';
 import { useSettingsStore } from './stores/settings';
 import { useTaskStore } from './stores/tasks';
 import { useUiStore } from './stores/ui';
@@ -22,7 +21,6 @@ export default function App() {
   useEffect(() => {
     useSettingsStore.getState().load().then(() => {
       useTaskStore.getState().load();
-      useEventStore.getState().loadMonth();
     });
   }, []);
 
@@ -41,7 +39,6 @@ export default function App() {
   useEffect(() => {
     const un1 = listen('quick://changed', () => {
       useTaskStore.getState().load();
-      useEventStore.getState().loadMonth();
     });
     const un2 = listen<{ type: 'task' | 'event'; id: string }>('quick://open', async (e) => {
       const w = getCurrentWindow();

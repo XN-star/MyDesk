@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { fromLocalInput, toLocalInput } from '../../lib/format';
+import DatePicker from '../../components/DatePicker';
+import TimeSpinner from '../../components/TimeSpinner';
+import { dateOf } from '../../lib/format';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
 
@@ -19,10 +21,19 @@ export default function TaskDrawer() {
   const [title, setTitle] = useState(editing?.title ?? '');
   const [description, setDescription] = useState(editing?.description ?? '');
   const [priority, setPriority] = useState(editing?.priority ?? 1);
-  const [dueAt, setDueAt] = useState(toLocalInput(editing?.dueAt ?? null));
+  const [dueDate, setDueDate] = useState(dateOf(editing?.dueAt ?? null) ?? '');
+  const [dueTime, setDueTime] = useState(
+    editing?.dueAt ? editing.dueAt.slice(11, 16) : '09:00',
+  );
+  const [hasDue, setHasDue] = useState(!!editing?.dueAt);
   const [status, setStatus] = useState(
     editing?.status ?? (drawer.mode === 'create' ? drawer.status : 'todo'),
   );
+
+  function buildDueAt(): string | null {
+    if (!hasDue || !dueDate) return null;
+    return `${dueDate}T${dueTime}:00`;
+  }
 
   async function save() {
     if (!title.trim()) {
@@ -30,12 +41,13 @@ export default function TaskDrawer() {
       return;
     }
     try {
+      const dueAt = buildDueAt();
       if (drawer.mode === 'create') {
         await create({
           title: title.trim(),
           description,
           priority,
-          dueAt: fromLocalInput(dueAt),
+          dueAt,
           status,
         });
       } else if (editing) {
@@ -44,7 +56,7 @@ export default function TaskDrawer() {
           title: title.trim(),
           description,
           priority,
-          dueAt: fromLocalInput(dueAt),
+          dueAt,
           status,
         });
       }
@@ -90,8 +102,26 @@ export default function TaskDrawer() {
           </select>
         </div>
         <div className="field">
-          <label>截止时间</label>
-          <input className="input" type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+          <label className="field-label">
+            <input
+              type="checkbox"
+              checked={hasDue}
+              onChange={(e) => setHasDue(e.target.checked)}
+            />
+            截止时间（到点弹系统提醒）
+          </label>
+          {hasDue && (
+            <div className="due-editor">
+              <DatePicker
+                value={dueDate}
+                placeholder="选择日期"
+                onChange={(d) => {
+                  setDueDate(d ?? '');
+                }}
+              />
+              <TimeSpinner value={dueTime} onChange={setDueTime} />
+            </div>
+          )}
         </div>
         <div className="field">
           <label>状态</label>

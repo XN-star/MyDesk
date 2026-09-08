@@ -47,7 +47,17 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
   width: 168px; flex: none; display: flex; flex-direction: column; gap: 4px;
   padding: 12px 8px; background: var(--panel); border-right: 1px solid var(--border);
 }
-.sidebar-logo { font-size: 20px; padding: 4px 10px 12px; color: var(--accent); }
+.sidebar-logo { display: none; }
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 20px 10px 18px;
+}
+.brand-icon {
+  display: inline-grid; place-items: center;
+  width: 36px; height: 36px; border-radius: 10px;
+  background: var(--accent); color: #fff; font-size: 22px; flex: none;
+}
+.brand-name { font-size: 18px; font-weight: 700; letter-spacing: 1px; }
 .side-item {
   display: flex; align-items: center; gap: 8px; width: 100%;
   background: none; border: none; border-radius: 8px;
@@ -116,7 +126,9 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .day-row .btn { margin-left: auto; padding: 2px 8px; }
 .day-empty { color: var(--muted); font-size: 12px; padding: 4px 0; }
 .day-add { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
-.day-add-times { display: flex; gap: 6px; }
+.day-add-times { display: flex; gap: 8px; align-items: center; }
+.day-add-label { font-size: 12px; color: var(--muted); flex: none; }
+.day-hint { font-size: 11px; color: var(--muted); }
 
 .quick { padding: 12px; display: flex; flex-direction: column; gap: 10px; height: 100vh; background: var(--panel); }
 .quick-input { padding: 12px 14px; font-size: 16px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); outline: none; }
@@ -134,3 +146,47 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .settings-row small { display: block; color: var(--muted); }
 .settings-actions { display: flex; gap: 8px; }
 .muted { color: var(--muted); }
+
+/* 月历网格（CalendarPage 与 DatePicker 弹层共用） */
+.month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; flex: 1; grid-auto-rows: 1fr; }
+
+/* 日期选择器弹层 */
+.date-picker { position: relative; display: inline-flex; align-items: center; gap: 4px; flex: 1; }
+.picker-btn { flex: 1; text-align: left; }
+.picker-placeholder { color: var(--muted); }
+.picker-clear { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; }
+.picker-clear:hover { color: var(--danger); }
+.picker-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.2); padding: 10px;
+  width: 320px; height: 300px; display: flex; flex-direction: column;
+}
+.picker-head { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 6px; }
+.picker-head .btn { padding: 2px 10px; }
+
+/* 时间滚轮 */
+.time-spinner { display: flex; gap: 8px; }
+.spinner-col { display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative; }
+.spinner-arrow { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; font-size: 9px; padding: 1px 10px; cursor: pointer; color: var(--muted); }
+.spinner-arrow:hover { color: var(--accent); border-color: var(--accent); }
+.spinner-list {
+  width: 52px; height: 108px; overflow-y: auto; scroll-snap-type: y mandatory;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg);
+  scrollbar-width: none;
+}
+.spinner-list::-webkit-scrollbar { display: none; }
+.spinner-item {
+  padding: 3px 0; text-align: center; cursor: pointer; scroll-snap-align: center;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.spinner-item:hover { color: var(--text); }
+.spinner-item.active { color: var(--accent); font-weight: 700; font-size: 15px; }
+.spinner-label { font-size: 11px; color: var(--muted); }
+
+/* 抽屉里的截止时间编辑区 */
+.field-label { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; cursor: pointer; }
+.due-editor { display: flex; align-items: center; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+
+/* 日历格 "+N" 角标 */
+.cell-more { font-size: 10px; color: var(--muted); align-self: center; }

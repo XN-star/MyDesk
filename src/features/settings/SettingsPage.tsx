@@ -2,7 +2,6 @@ import { confirm, open, save } from '@tauri-apps/plugin-dialog';
 import { api } from '../../lib/api';
 import type { ThemeMode } from '../../lib/theme';
 import { MODULES } from '../../modules/registry';
-import { useEventStore } from '../../stores/events';
 import { useSettingsStore } from '../../stores/settings';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
@@ -45,7 +44,6 @@ export default function SettingsPage() {
       const n = await api.backupImport(path);
       await useSettingsStore.getState().load();
       await useTaskStore.getState().load();
-      await useEventStore.getState().loadMonth();
       toast(`导入完成，共 ${n} 条`);
     } catch (e) {
       toast(`导入失败：${e}`, 'error');

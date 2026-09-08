@@ -21,21 +21,3 @@ export interface TaskInput {
   dueAt?: string | null;
   status?: TaskStatus;
 }
-
-export interface EventItem {
-  id: string;
-  title: string;
-  date: string; // YYYY-MM-DD
-  timeStart: string | null; // HH:MM
-  timeEnd: string | null;
-  note: string;
-  createdAt: string;
-}
-
-export interface EventInput {
-  title: string;
-  date: string;
-  timeStart?: string | null;
-  timeEnd?: string | null;
-  note?: string;
-}

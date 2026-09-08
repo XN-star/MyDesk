@@ -8,7 +8,10 @@ export default function Sidebar() {
 
   return (
     <nav className="sidebar">
-      <div className="sidebar-logo">◆</div>
+      <div className="brand">
+        <span className="brand-icon">◆</span>
+        <span className="brand-name">个人工作台</span>
+      </div>
       {enabled.map((m) => (
         <button
           key={m.id}
