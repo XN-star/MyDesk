@@ -4,15 +4,17 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-pub const VERSION: i64 = 3;
+pub const VERSION: i64 = 4;
 
 pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let tasks = query_all_tasks(conn)?;
+    let notes = query_all_notes(conn)?;
     let settings = query_all_settings(conn)?;
     let doc = json!({
         "version": VERSION,
         "exportedAt": crate::commands::now_iso(),
         "tasks": tasks,
+        "notes": notes,
         "settings": settings,
     });
     std::fs::write(path, serde_json::to_vec_pretty(&doc)?)?;
@@ -44,6 +46,11 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     let settings: Vec<SettingRow> =
         serde_json::from_value(doc.get("settings").cloned().unwrap_or_default())
             .context("settings 字段缺失或格式错误")?;
+    // v1–v3 备份没有 notes 字段，视为空（整库替换语义）。
+    let notes: Vec<Note> = match doc.get("notes") {
+        Some(v) => serde_json::from_value(v.clone()).context("notes 字段格式错误")?,
+        None => Vec::new(),
+    };
 
     // v1 备份中的日程转换为任务（due_at = date + time_start，缺省 09:00）。
     let mut converted: Vec<Task> = Vec::new();
@@ -104,6 +111,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
 
     let tx = conn.transaction()?;
     tx.execute("DELETE FROM tasks", [])?;
+    tx.execute("DELETE FROM notes", [])?;
     tx.execute("DELETE FROM settings", [])?;
     for t in tasks.iter().chain(converted.iter()) {
         tx.execute(
@@ -124,11 +132,17 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
             ],
         )?;
     }
+    for n in &notes {
+        tx.execute(
+            NOTE_INSERT,
+            params![n.id, n.title, n.content, n.pinned, n.created_at, n.updated_at],
+        )?;
+    }
     for s in &settings {
         tx.execute(SETTING_INSERT, params![s.key, s.value])?;
     }
     tx.commit()?;
-    Ok(tasks.len() + converted.len())
+    Ok(tasks.len() + converted.len() + notes.len())
 }
 
 #[cfg(test)]
@@ -149,7 +163,7 @@ mod tests {
     }
 
     #[test]
-    fn export_then_import_roundtrip_v3() {
+    fn export_then_import_roundtrip() {
         let src = mem();
         seed(&src);
         let file = std::env::temp_dir().join(format!("ws-bk3-{}.json", std::process::id()));
@@ -163,7 +177,59 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 3);
+        assert_eq!(doc["version"], 4);
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_preserves_notes() {
+        let src = mem();
+        src.execute(
+            crate::models::NOTE_INSERT,
+            params!["n1", "标题", "内容", 1, "2026-09-08T10:00:00", "2026-09-08T10:00:00"],
+        )
+        .unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-notes-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+
+        let mut dst = mem();
+        import(&mut dst, &file).unwrap();
+        let notes = crate::models::query_all_notes(&dst).unwrap();
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].title, "标题");
+        assert!(notes[0].pinned);
+
+        let text = std::fs::read_to_string(&file).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["version"], 4);
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn import_v3_backup_without_notes_is_accepted() {
+        let file = std::env::temp_dir().join(format!("ws-bk-v3nonotes-{}.json", std::process::id()));
+        std::fs::write(
+            &file,
+            r#"{
+              "version": 3,
+              "tasks": [
+                {"id":"t1","boardId":"default","title":"旧任务","description":"","status":"todo","priority":1,"dueAt":"2026-09-08T10:00:00","sortOrder":100,"doneAt":null,"remindMinutesBefore":0,"createdAt":"2026-09-07T09:00:00","updatedAt":"2026-09-07T09:00:00"}
+              ],
+              "settings": []
+            }"#,
+        )
+        .unwrap();
+
+        let mut c = mem();
+        c.execute(crate::models::NOTE_INSERT, params!["n-old", "将被清空", "", 0, "2026-09-08T10:00:00", "2026-09-08T10:00:00"]).unwrap();
+        let n = import(&mut c, &file).unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(query_all_tasks(&c).unwrap().len(), 1);
+        assert_eq!(
+            crate::models::query_all_notes(&c).unwrap().len(),
+            0,
+            "旧备份无 notes，整库替换后为空"
+        );
         std::fs::remove_file(&file).ok();
     }
 
