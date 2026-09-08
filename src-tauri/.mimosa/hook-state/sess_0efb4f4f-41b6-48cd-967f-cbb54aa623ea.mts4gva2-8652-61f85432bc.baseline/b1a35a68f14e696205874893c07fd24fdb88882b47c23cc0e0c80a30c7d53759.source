@@ -68,14 +68,7 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            // 窗口配置 create=false：状态注册完成后手动创建，
-            // 避免前端过早 invoke 时 Db 状态尚未注册。
-            for window_config in app.config().app.windows.iter() {
-                tauri::WebviewWindowBuilder::from_config(app.handle(), window_config)?.build()?;
-            }
-
             // 主窗口点 × 不直接退出：前端弹确认（退出/后台），由事件决定行为。
-            // 必须在窗口创建之后挂接（create=false 时此前窗口尚不存在）。
             let main = app.get_webview_window("main").unwrap();
             let main_for_emit = main.clone();
             main.on_window_event(move |event| {
@@ -85,6 +78,12 @@ pub fn run() {
                     let _ = main_for_emit.emit("app://close-requested", ());
                 }
             });
+
+            // 窗口配置 create=false：状态注册完成后手动创建，
+            // 避免前端过早 invoke 时 Db 状态尚未注册。
+            for window_config in app.config().app.windows.iter() {
+                tauri::WebviewWindowBuilder::from_config(app.handle(), window_config)?.build()?;
+            }
             Ok(())
         })
         .on_window_event(|_window, _event| {})

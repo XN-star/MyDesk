@@ -1,12 +1,8 @@
 use rusqlite::{Connection, Row};
 use serde::{Deserialize, Serialize};
 
-pub const TASK_COLS: &str =
-    "id, board_id, title, description, status, priority, due_at, sort_order, done_at, created_at, updated_at";
-pub const TASK_INSERT: &str = "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)";
-pub const EVENT_COLS: &str = "id, title, date, time_start, time_end, note, created_at";
-pub const EVENT_INSERT: &str =
-    "INSERT INTO events (id, title, date, time_start, time_end, note, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)";
+pub const TASK_COLS: &str = "id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at";
+pub const TASK_INSERT: &str = "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)";
 pub const SETTING_INSERT: &str = "INSERT INTO settings (key, value) VALUES (?1, ?2)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -21,6 +17,8 @@ pub struct Task {
     pub due_at: Option<String>,
     pub sort_order: f64,
     pub done_at: Option<String>,
+    /// 提前提醒分钟数：None=不提醒，0=准点，n=提前 n 分钟。
+    pub remind_minutes_before: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -37,6 +35,8 @@ pub struct TaskInput {
     pub due_at: Option<String>,
     #[serde(default = "dft_status")]
     pub status: String,
+    #[serde(default = "dft_remind")]
+    pub remind_minutes_before: Option<i64>,
 }
 
 fn dft_priority() -> i64 {
@@ -45,30 +45,8 @@ fn dft_priority() -> i64 {
 fn dft_status() -> String {
     "todo".into()
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EventItem {
-    pub id: String,
-    pub title: String,
-    pub date: String,
-    pub time_start: Option<String>,
-    pub time_end: Option<String>,
-    pub note: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EventInput {
-    pub title: String,
-    pub date: String,
-    #[serde(default)]
-    pub time_start: Option<String>,
-    #[serde(default)]
-    pub time_end: Option<String>,
-    #[serde(default)]
-    pub note: String,
+fn dft_remind() -> Option<i64> {
+    Some(0)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,43 +66,27 @@ pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
         due_at: r.get(6)?,
         sort_order: r.get(7)?,
         done_at: r.get(8)?,
-        created_at: r.get(9)?,
-        updated_at: r.get(10)?,
-    })
-}
-
-pub fn event_from_row(r: &Row) -> rusqlite::Result<EventItem> {
-    Ok(EventItem {
-        id: r.get(0)?,
-        title: r.get(1)?,
-        date: r.get(2)?,
-        time_start: r.get(3)?,
-        time_end: r.get(4)?,
-        note: r.get(5)?,
-        created_at: r.get(6)?,
+        remind_minutes_before: r.get(9)?,
+        created_at: r.get(10)?,
+        updated_at: r.get(11)?,
     })
 }
 
 pub fn query_all_tasks(c: &Connection) -> rusqlite::Result<Vec<Task>> {
     let mut stmt = c.prepare(&format!("SELECT {TASK_COLS} FROM tasks ORDER BY sort_order"))?;
-    stmt.query_map([], task_from_row)?.collect()
-}
-
-pub fn query_all_events(c: &Connection) -> rusqlite::Result<Vec<EventItem>> {
-    let mut stmt =
-        c.prepare(&format!("SELECT {EVENT_COLS} FROM events ORDER BY date, time_start"))?;
-    stmt.query_map([], event_from_row)?.collect()
+    let rows = stmt.query_map([], task_from_row)?;
+    rows.collect()
 }
 
 pub fn query_all_settings(c: &Connection) -> rusqlite::Result<Vec<SettingRow>> {
     let mut stmt = c.prepare("SELECT key, value FROM settings")?;
-    stmt.query_map([], |r| {
+    let rows = stmt.query_map([], |r| {
         Ok(SettingRow {
             key: r.get(0)?,
             value: r.get(1)?,
         })
-    })?
-    .collect()
+    })?;
+    rows.collect()
 }
 
 #[cfg(test)]
@@ -141,13 +103,14 @@ mod tests {
     #[test]
     fn task_roundtrip_via_row_mapping() {
         let c = mem();
-        c.execute(TASK_INSERT, params!["t1", "default", "写报告", "周报", "todo", 2, "2026-09-08T10:00:00", 100.0, None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["t1", "default", "写报告", "周报", "todo", 2, "2026-09-08T10:00:00", 100.0, None::<String>, Some(15), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         let got = query_all_tasks(&c).unwrap();
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].title, "写报告");
         assert_eq!(got[0].due_at.as_deref(), Some("2026-09-08T10:00:00"));
         assert_eq!(got[0].priority, 2);
         assert_eq!(got[0].board_id, "default");
+        assert_eq!(got[0].remind_minutes_before, Some(15));
     }
 
     #[test]
@@ -157,12 +120,13 @@ mod tests {
         assert_eq!(input.priority, 1);
         assert_eq!(input.status, "todo");
         assert_eq!(input.due_at, None);
+        assert_eq!(input.remind_minutes_before, Some(0), "默认准点提醒");
     }
 
     #[test]
-    fn event_input_accepts_camel_case() {
-        let json = r#"{"title":"周会","date":"2026-09-08","timeStart":"15:00","timeEnd":"16:00"}"#;
-        let input: EventInput = serde_json::from_str(json).unwrap();
-        assert_eq!(input.time_start.as_deref(), Some("15:00"));
+    fn task_input_remind_null() {
+        let json = r#"{"title":"静默任务","remindMinutesBefore":null}"#;
+        let input: TaskInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.remind_minutes_before, None);
     }
 }
