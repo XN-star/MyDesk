@@ -97,69 +97,6 @@ pub fn task_delete(db: DbState, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn event_list_month(db: DbState, month: String) -> Result<Vec<EventItem>, String> {
-    with_conn(db, move |c| {
-        let pattern = format!("{month}%");
-        let mut stmt = c.prepare(&format!(
-            "SELECT {EVENT_COLS} FROM events WHERE date LIKE ?1 ORDER BY date, time_start"
-        ))?;
-        let rows = stmt.query_map(params![pattern], event_from_row)?;
-        rows.collect()
-    })
-}
-
-#[tauri::command]
-pub fn event_list_date(db: DbState, date: String) -> Result<Vec<EventItem>, String> {
-    with_conn(db, move |c| {
-        let mut stmt = c.prepare(&format!(
-            "SELECT {EVENT_COLS} FROM events WHERE date = ?1 ORDER BY time_start"
-        ))?;
-        let rows = stmt.query_map(params![date], event_from_row)?;
-        rows.collect()
-    })
-}
-
-#[tauri::command]
-pub fn event_create(db: DbState, input: EventInput) -> Result<EventItem, String> {
-    let now = now_iso();
-    with_conn(db, move |c| {
-        let e = EventItem {
-            id: Uuid::new_v4().to_string(),
-            title: input.title,
-            date: input.date,
-            time_start: input.time_start,
-            time_end: input.time_end,
-            note: input.note,
-            created_at: now,
-        };
-        c.execute(
-            EVENT_INSERT,
-            params![e.id, e.title, e.date, e.time_start, e.time_end, e.note, e.created_at],
-        )?;
-        Ok(e)
-    })
-}
-
-#[tauri::command]
-pub fn event_update(db: DbState, event: EventItem) -> Result<EventItem, String> {
-    with_conn(db, move |c| {
-        c.execute(
-            "UPDATE events SET title=?2, date=?3, time_start=?4, time_end=?5, note=?6 WHERE id=?1",
-            params![event.id, event.title, event.date, event.time_start, event.time_end, event.note],
-        )?;
-        Ok(event)
-    })
-}
-
-#[tauri::command]
-pub fn event_delete(db: DbState, id: String) -> Result<(), String> {
-    with_conn(db, move |c| {
-        c.execute("DELETE FROM events WHERE id=?1", params![id])?;
-        Ok(())
-    })
-}
-
-#[tauri::command]
 pub fn settings_all(db: DbState) -> Result<HashMap<String, String>, String> {
     with_conn(db, |c| {
         let rows = query_all_settings(c)?;

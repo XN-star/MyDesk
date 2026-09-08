@@ -4,9 +4,6 @@ use serde::{Deserialize, Serialize};
 pub const TASK_COLS: &str =
     "id, board_id, title, description, status, priority, due_at, sort_order, done_at, created_at, updated_at";
 pub const TASK_INSERT: &str = "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)";
-pub const EVENT_COLS: &str = "id, title, date, time_start, time_end, note, created_at";
-pub const EVENT_INSERT: &str =
-    "INSERT INTO events (id, title, date, time_start, time_end, note, created_at) VALUES (?1,?2,?3,?4,?5,?6,?7)";
 pub const SETTING_INSERT: &str = "INSERT INTO settings (key, value) VALUES (?1, ?2)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,31 +44,6 @@ fn dft_status() -> String {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EventItem {
-    pub id: String,
-    pub title: String,
-    pub date: String,
-    pub time_start: Option<String>,
-    pub time_end: Option<String>,
-    pub note: String,
-    pub created_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EventInput {
-    pub title: String,
-    pub date: String,
-    #[serde(default)]
-    pub time_start: Option<String>,
-    #[serde(default)]
-    pub time_end: Option<String>,
-    #[serde(default)]
-    pub note: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SettingRow {
     pub key: String,
     pub value: String,
@@ -93,28 +65,9 @@ pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
     })
 }
 
-pub fn event_from_row(r: &Row) -> rusqlite::Result<EventItem> {
-    Ok(EventItem {
-        id: r.get(0)?,
-        title: r.get(1)?,
-        date: r.get(2)?,
-        time_start: r.get(3)?,
-        time_end: r.get(4)?,
-        note: r.get(5)?,
-        created_at: r.get(6)?,
-    })
-}
-
 pub fn query_all_tasks(c: &Connection) -> rusqlite::Result<Vec<Task>> {
     let mut stmt = c.prepare(&format!("SELECT {TASK_COLS} FROM tasks ORDER BY sort_order"))?;
     let rows = stmt.query_map([], task_from_row)?;
-    rows.collect()
-}
-
-pub fn query_all_events(c: &Connection) -> rusqlite::Result<Vec<EventItem>> {
-    let mut stmt =
-        c.prepare(&format!("SELECT {EVENT_COLS} FROM events ORDER BY date, time_start"))?;
-    let rows = stmt.query_map([], event_from_row)?;
     rows.collect()
 }
 
@@ -159,12 +112,5 @@ mod tests {
         assert_eq!(input.priority, 1);
         assert_eq!(input.status, "todo");
         assert_eq!(input.due_at, None);
-    }
-
-    #[test]
-    fn event_input_accepts_camel_case() {
-        let json = r#"{"title":"周会","date":"2026-09-08","timeStart":"15:00","timeEnd":"16:00"}"#;
-        let input: EventInput = serde_json::from_str(json).unwrap();
-        assert_eq!(input.time_start.as_deref(), Some("15:00"));
     }
 }

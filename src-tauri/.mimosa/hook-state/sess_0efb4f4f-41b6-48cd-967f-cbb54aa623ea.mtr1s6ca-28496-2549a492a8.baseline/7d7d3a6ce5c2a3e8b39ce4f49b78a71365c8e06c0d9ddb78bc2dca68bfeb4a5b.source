@@ -84,7 +84,7 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
                 [],
-                |r| r.get::<_, i64>(0),
+                |r| r.get(0),
             )?
             > 0;
         if has_events {
