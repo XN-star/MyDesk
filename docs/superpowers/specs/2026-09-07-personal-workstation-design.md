@@ -89,11 +89,13 @@ interface Module {
 
 ## 6. 数据模型与存储层
 
-- 数据库文件：`%APPDATA%/personal-workstation/app.db`；首次启动自动建表；表结构变更加版本号迁移。
-- 日期时间格式：`due_at`/`created_at` 等用 ISO 8601 字符串；日历 `date` 用 `YYYY-MM-DD`。
+> 2026-09-08 修订：看板与日历**统一为一种条目**——原独立的 `events` 表已废除（v1→v2 迁移把日程并入任务：`due_at = date + time_start`，无时刻的日程落在当天 09:00）。日历上的一切条目都是任务，天然双向同步；到点自动弹提醒。
+
+- 数据库文件：`%APPDATA%/personal-workstation/app.db`；首次启动自动建表（直接为 v2 形态）；`user_version` 管理迁移（v1 旧库自动升级）。
+- 日期时间格式：`due_at`/`created_at` 等用本地无时区 ISO：`YYYY-MM-DDTHH:MM:SS`，可直接字符串比较。
 
 ```sql
--- 任务表（预留多看板字段）
+-- v2：任务 + 设置两张表
 CREATE TABLE tasks (
   id          TEXT PRIMARY KEY,   -- UUID
   board_id    TEXT NOT NULL DEFAULT 'default',  -- 预留：多看板
@@ -101,25 +103,12 @@ CREATE TABLE tasks (
   description TEXT DEFAULT '',
   status      TEXT NOT NULL DEFAULT 'todo',     -- todo | doing | done
   priority    INTEGER NOT NULL DEFAULT 1,       -- 0=低 1=中 2=高 3=紧急
-  due_at      TEXT,               -- ISO 8601，可空=无截止
+  due_at      TEXT,               -- YYYY-MM-DDTHH:MM:SS，可空=无时刻
   sort_order  REAL NOT NULL,      -- 列内排序（拖拽时用）
   done_at     TEXT,               -- 完成时间
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL
 );
-
--- 事件表（日历日程，独立于任务）
-CREATE TABLE events (
-  id          TEXT PRIMARY KEY,
-  title       TEXT NOT NULL,
-  date        TEXT NOT NULL,      -- YYYY-MM-DD
-  time_start  TEXT,               -- HH:MM，可空=全天
-  time_end    TEXT,
-  note        TEXT DEFAULT '',
-  created_at  TEXT NOT NULL
-);
-
--- 设置表（模块开关、主题等，KV 结构）
 CREATE TABLE settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL              -- JSON 字符串
@@ -128,9 +117,10 @@ CREATE TABLE settings (
 
 **要点**：
 
-- 任务与事件**分表不分家**：日历某天的详情 = 当天事件 + 当天到期任务（按 `due_at` 的日期部分）合并展示，同源数据两模块共用，无双份维护。
+- 看板与日历同源：日历某天详情 = 按 `due_at` 日期筛选的任务，纯时间顺序；看板与日历任意一侧增改即时互通。
+- 无 `due_at` 的任务不出现在日历（没有日期概念），只在看板显示。
 - `board_id` 恒为 `'default'`，多看板上线时无需改表。
-- **备份**：`backup_export` 把三张表全量导出为带 `version` 字段的 JSON 文件；`backup_import` 校验版本与结构，不合法则报错且**零写入**，合法则整库替换（事务内）。
+- **备份**：v2 格式（`tasks` + `settings` + `version: 2`）；导入兼容 v1（其中的 `events` 逐条转换为任务）与 v2；版本高于当前拒绝；校验失败**零写入**（事务内整库替换）。
 - 导出/导入通过系统文件对话框选择位置。
 
 ## 7. 界面与交互
@@ -139,15 +129,16 @@ CREATE TABLE settings (
 
 ```
 ┌────────┬──────────────────────────────┐
-│ ◆ 工作台 │  今日摘要条：N 个待办 · M 个日程 · 下个截止 Xh 后 │
+│ ◆ 个人工作台 │  今日摘要条：N 个未完成任务 · 今日 M 项 · 下个截止 Xh 后 │
 ├────────┼──────────────────────────────┤
 │ ▦ 任务看板│                              │
 │ ▤ 日历   │     模块内容区                │
 │         │  （看板 / 日历 / 设置页）       │
-│ ⚙ 模块管理│                              │
 │ ⚙ 设置   │                              │
 └────────┴──────────────────────────────┘
 ```
+
+**侧边栏品牌头**（2026-09-08 修订）：顶部为「◆ 个人工作台」品牌块——36px accent 色圆角图标底 + 18px 加粗名称，加大留白下移。（窗口最顶部的系统标题栏由 Windows 绘制，应用内不修改。）
 
 **任务看板页**：
 
@@ -156,11 +147,12 @@ CREATE TABLE settings (
 - 点击卡片打开右侧抽屉编辑：标题、描述、优先级、截止日期、删除。
 - 列顶「+」快速新建；拖入「已完成」自动记录 `done_at`，拖回则清除。
 
-**日历页**：
+**日历页**（2026-09-08 修订：与看板同源，无独立日程）：
 
-- 月历格子；有任务/事件的日期显示小圆点（任务点=优先级色，事件点=蓝色）。
-- 点击日期 → 右侧当日详情面板：该日事件列表 + 到期任务列表，就地新增/编辑/划完成。
-- 双击月历某天快速新建。
+- 月历格子；有任务的日期显示优先级色圆点（上限 6 个，超出显示 "+N"）。
+- 点击日期 → 右侧当日详情面板：该日条目按时刻排序，可勾选完成、删除；添加表单 = 标题 +「时刻」滚轮（明确标注用途：到点弹提醒、按此排序），默认 09:00。
+
+**时间与日期输入**（2026-09-08 新增）：不使用系统原生 `datetime-local`。日期 = 应用内月历弹层选择（可清除）；时间 = 时/分双列滚轮（▲▼ 按钮 + 滚轮 + 点选）；带明确标签说明时间用途。
 
 **快速面板**（全局 Alt+Space）：
 
