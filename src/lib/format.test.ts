@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dateOf, dueLabel, isOverdue, monthOf, toDateStr, toLocalInput } from './format';
+import { dateOf, dueLabel, isOverdue, monthOf, timeShort, toDateStr, toLocalInput } from './format';
 
 const now = new Date('2026-09-07T10:00:00');
 
@@ -38,5 +38,17 @@ describe('format', () => {
   it('toLocalInput 截断到分钟（datetime-local 用）', () => {
     expect(toLocalInput('2026-09-08T10:00:00')).toBe('2026-09-08T10:00');
     expect(toLocalInput(null)).toBe('');
+  });
+});
+
+describe('timeShort', () => {
+  const now = new Date('2026-09-08T18:00:00');
+
+  it('当天的笔记只显示时分', () => {
+    expect(timeShort('2026-09-08T10:32:00', now)).toBe('10:32');
+  });
+
+  it('跨天显示 月/日', () => {
+    expect(timeShort('2026-09-01T09:00:00', now)).toBe('9/1');
   });
 });

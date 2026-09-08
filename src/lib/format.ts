@@ -45,3 +45,10 @@ export function dueLabel(iso: string, now: Date = new Date()): string {
   const days = Math.round(hours / 24);
   return `${days}天后`;
 }
+
+/** 笔记列表用的更新时间短格式：当天 HH:mm，跨天 M/D */
+export function timeShort(iso: string, now: Date = new Date()): string {
+  if (dateOf(iso) === toDateStr(now)) return iso.slice(11, 16);
+  const [, m, d] = dateOf(iso)!.split('-');
+  return `${Number(m)}/${Number(d)}`;
+}

@@ -24,3 +24,17 @@ export interface TaskInput {
   status?: TaskStatus;
   remindMinutesBefore?: number | null;
 }
+
+export interface Note {
+  id: string;
+  title: string;
+  content: string;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NoteInput {
+  title: string;
+  content?: string;
+}
