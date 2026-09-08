@@ -41,7 +41,10 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::GlobalShortcutExt;
-                app.global_shortcut().register("alt+space")?;
+                // 快捷键被其他程序占用时降级为仅日志，不让应用启动即崩。
+                if let Err(e) = app.global_shortcut().register("alt+space") {
+                    println!("全局快捷键 alt+space 注册失败（可能被其他程序占用）：{e}");
+                }
             }
 
             // 系统托盘：左键点击显示主窗口；菜单含「显示主界面」「退出」。
