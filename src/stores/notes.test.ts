@@ -3,7 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const api = vi.hoisted(() => ({
   noteList: vi.fn(async () => []),
   noteCreate: vi.fn(),
-  noteUpdate: vi.fn(async (n: { updatedAt: string }) => ({ ...n, updatedAt: '2026-09-08T12:00:00' })),
+  noteUpdate: vi.fn(async (n: Record<string, unknown> & { updatedAt: string }) => ({
+    ...n,
+    updatedAt: '2026-09-08T12:00:00',
+  })),
   noteDelete: vi.fn(async () => {}),
 }));
 

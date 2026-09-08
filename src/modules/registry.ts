@@ -1,6 +1,7 @@
 import type { Module } from './types';
 import KanbanPage from '../features/tasks/KanbanPage';
 import CalendarPage from '../features/calendar/CalendarPage';
+import NotesPage from '../features/notes/NotesPage';
 
 export const MODULES: Module[] = [
   {
@@ -20,6 +21,15 @@ export const MODULES: Module[] = [
     defaultEnabled: true,
     route: '/calendar',
     component: CalendarPage,
+  },
+  {
+    id: 'notes',
+    name: '笔记',
+    icon: '✎',
+    description: '纯文本快速记录',
+    defaultEnabled: true,
+    route: '/notes',
+    component: NotesPage,
   },
 ];
 
