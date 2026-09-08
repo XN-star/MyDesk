@@ -11,3 +11,4 @@ src-tauri/gen/schemas
 
 # 扫描工具状态（不入库）
 .mimosa/
+.playwright-mcp/
