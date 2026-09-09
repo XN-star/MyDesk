@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, TaskInput, Note, NoteInput } from '../types';
+import type { Task, TaskInput, Note, NoteInput, Link, LinkInput } from '../types';
 
 export const api = {
   taskList: () => invoke<Task[]>('task_list'),
@@ -10,6 +10,12 @@ export const api = {
   noteCreate: (input: NoteInput) => invoke<Note>('note_create', { input }),
   noteUpdate: (note: Note) => invoke<Note>('note_update', { note }),
   noteDelete: (id: string) => invoke<void>('note_delete', { id }),
+  linkList: () => invoke<Link[]>('link_list'),
+  linkCreate: (input: LinkInput) => invoke<Link>('link_create', { input }),
+  linkUpdate: (link: Link) => invoke<Link>('link_update', { link }),
+  linkDelete: (id: string) => invoke<void>('link_delete', { id }),
+  linkMove: (id: string, sortOrder: number) => invoke<void>('link_move', { id, sortOrder }),
+  linkRun: (id: string) => invoke<void>('link_run', { id }),
   settingsAll: () => invoke<Record<string, string>>('settings_all'),
   settingsSet: (key: string, value: string) => invoke<void>('settings_set', { key, value }),
   backupExport: (path: string) => invoke<void>('backup_export', { path }),

@@ -38,3 +38,21 @@ export interface NoteInput {
   title: string;
   content?: string;
 }
+
+export type LinkKind = 'url' | 'path' | 'command';
+
+export interface Link {
+  id: string;
+  title: string;
+  kind: LinkKind;
+  target: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LinkInput {
+  title: string;
+  kind: LinkKind;
+  target: string;
+}
