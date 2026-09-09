@@ -4,17 +4,19 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-pub const VERSION: i64 = 4;
+pub const VERSION: i64 = 5;
 
 pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let tasks = query_all_tasks(conn)?;
     let notes = query_all_notes(conn)?;
+    let links = query_all_links(conn)?;
     let settings = query_all_settings(conn)?;
     let doc = json!({
         "version": VERSION,
         "exportedAt": crate::commands::now_iso(),
         "tasks": tasks,
         "notes": notes,
+        "links": links,
         "settings": settings,
     });
     std::fs::write(path, serde_json::to_vec_pretty(&doc)?)?;
@@ -49,6 +51,11 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     // v1–v3 备份没有 notes 字段，视为空（整库替换语义）。
     let notes: Vec<Note> = match doc.get("notes") {
         Some(v) => serde_json::from_value(v.clone()).context("notes 字段格式错误")?,
+        None => Vec::new(),
+    };
+    // v1–v4 备份没有 links 字段，视为空（整库替换语义）。
+    let links: Vec<Link> = match doc.get("links") {
+        Some(v) => serde_json::from_value(v.clone()).context("links 字段格式错误")?,
         None => Vec::new(),
     };
 
@@ -112,6 +119,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     let tx = conn.transaction()?;
     tx.execute("DELETE FROM tasks", [])?;
     tx.execute("DELETE FROM notes", [])?;
+    tx.execute("DELETE FROM links", [])?;
     tx.execute("DELETE FROM settings", [])?;
     for t in tasks.iter().chain(converted.iter()) {
         tx.execute(
@@ -138,11 +146,17 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
             params![n.id, n.title, n.content, n.pinned, n.created_at, n.updated_at],
         )?;
     }
+    for l in &links {
+        tx.execute(
+            LINK_INSERT,
+            params![l.id, l.title, l.kind, l.target, l.sort_order, l.created_at, l.updated_at],
+        )?;
+    }
     for s in &settings {
         tx.execute(SETTING_INSERT, params![s.key, s.value])?;
     }
     tx.commit()?;
-    Ok(tasks.len() + converted.len() + notes.len())
+    Ok(tasks.len() + converted.len() + notes.len() + links.len())
 }
 
 #[cfg(test)]
@@ -177,7 +191,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 4);
+        assert_eq!(doc["version"], 5);
         std::fs::remove_file(&file).ok();
     }
 
@@ -201,7 +215,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 4);
+        assert_eq!(doc["version"], 5);
         std::fs::remove_file(&file).ok();
     }
 
@@ -229,6 +243,59 @@ mod tests {
             crate::models::query_all_notes(&c).unwrap().len(),
             0,
             "旧备份无 notes，整库替换后为空"
+        );
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_preserves_links() {
+        let src = mem();
+        src.execute(
+            crate::models::LINK_INSERT,
+            params!["l1", "Gmail", "url", "https://mail.google.com", 100.0, "2026-09-08T10:00:00", "2026-09-08T10:00:00"],
+        )
+        .unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-links-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+
+        let mut dst = mem();
+        import(&mut dst, &file).unwrap();
+        let links = crate::models::query_all_links(&dst).unwrap();
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].title, "Gmail");
+        assert_eq!(links[0].kind, "url");
+
+        let text = std::fs::read_to_string(&file).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["version"], 5);
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn import_v4_backup_without_links_is_accepted() {
+        let file = std::env::temp_dir().join(format!("ws-bk-v4nolinks-{}.json", std::process::id()));
+        std::fs::write(
+            &file,
+            r#"{
+              "version": 4,
+              "tasks": [],
+              "notes": [
+                {"id":"n1","title":"旧笔记","content":"","pinned":false,"createdAt":"2026-09-08T10:00:00","updatedAt":"2026-09-08T10:00:00"}
+              ],
+              "settings": []
+            }"#,
+        )
+        .unwrap();
+
+        let mut c = mem();
+        c.execute(crate::models::LINK_INSERT, params!["l-old", "将被清空", "url", "https://old.example.com", 100.0, "2026-09-08T10:00:00", "2026-09-08T10:00:00"]).unwrap();
+        let n = import(&mut c, &file).unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(crate::models::query_all_notes(&c).unwrap().len(), 1);
+        assert_eq!(
+            crate::models::query_all_links(&c).unwrap().len(),
+            0,
+            "旧备份无 links，整库替换后为空"
         );
         std::fs::remove_file(&file).ok();
     }
