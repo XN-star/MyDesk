@@ -145,6 +145,84 @@ pub fn note_delete(db: DbState, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn link_list(db: DbState) -> Result<Vec<Link>, String> {
+    with_conn(db, query_all_links)
+}
+
+#[tauri::command]
+pub fn link_create(db: DbState, input: LinkInput) -> Result<Link, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        let max: f64 = c.query_row("SELECT COALESCE(MAX(sort_order), 0) FROM links", [], |r| r.get(0))?;
+        let l = Link {
+            id: Uuid::new_v4().to_string(),
+            title: input.title,
+            kind: input.kind,
+            target: input.target,
+            sort_order: max + 100.0,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        c.execute(
+            LINK_INSERT,
+            params![l.id, l.title, l.kind, l.target, l.sort_order, l.created_at, l.updated_at],
+        )?;
+        Ok(l)
+    })
+}
+
+#[tauri::command]
+pub fn link_update(db: DbState, link: Link) -> Result<Link, String> {
+    with_conn(db, move |c| {
+        let now = now_iso();
+        c.execute(
+            "UPDATE links SET title=?2, kind=?3, target=?4, updated_at=?5 WHERE id=?1",
+            params![link.id, link.title, link.kind, link.target, now],
+        )?;
+        Ok(Link { updated_at: now, ..link })
+    })
+}
+
+#[tauri::command]
+pub fn link_delete(db: DbState, id: String) -> Result<(), String> {
+    with_conn(db, move |c| {
+        c.execute("DELETE FROM links WHERE id=?1", params![id])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn link_move(db: DbState, id: String, sort_order: f64) -> Result<(), String> {
+    with_conn(db, move |c| {
+        c.execute(
+            "UPDATE links SET sort_order=?2, updated_at=?3 WHERE id=?1",
+            params![id, sort_order, now_iso()],
+        )?;
+        Ok(())
+    })
+}
+
+/// 仅 command 类型：本机执行用户自己配置的命令（单机个人应用，风险自担）。
+#[tauri::command]
+pub fn link_run(db: DbState, id: String) -> Result<(), String> {
+    let (kind, target) = with_conn(db, move |c| {
+        c.query_row(
+            "SELECT kind, target FROM links WHERE id=?1",
+            params![id],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)),
+        )
+    })?;
+    if kind != "command" {
+        return Err("仅命令类型可执行".into());
+    }
+    std::process::Command::new("cmd")
+        .args(["/C", &target])
+        .spawn()
+        .map_err(|e| format!("命令执行失败：{e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn settings_all(db: DbState) -> Result<HashMap<String, String>, String> {
     with_conn(db, |c| {
         let rows = query_all_settings(c)?;
