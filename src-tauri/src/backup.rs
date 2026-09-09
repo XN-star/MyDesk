@@ -4,12 +4,13 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-pub const VERSION: i64 = 5;
+pub const VERSION: i64 = 6;
 
 pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let tasks = query_all_tasks(conn)?;
     let notes = query_all_notes(conn)?;
     let links = query_all_links(conn)?;
+    let boards = query_all_boards(conn)?;
     let settings = query_all_settings(conn)?;
     let doc = json!({
         "version": VERSION,
@@ -17,6 +18,7 @@ pub fn export(conn: &Connection, path: &Path) -> Result<()> {
         "tasks": tasks,
         "notes": notes,
         "links": links,
+        "boards": boards,
         "settings": settings,
     });
     std::fs::write(path, serde_json::to_vec_pretty(&doc)?)?;
@@ -56,6 +58,11 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     // v1–v4 备份没有 links 字段，视为空（整库替换语义）。
     let links: Vec<Link> = match doc.get("links") {
         Some(v) => serde_json::from_value(v.clone()).context("links 字段格式错误")?,
+        None => Vec::new(),
+    };
+    // v1–v5 备份没有 boards 字段，视为空（导入后补种子 default）。
+    let boards: Vec<Board> = match doc.get("boards") {
+        Some(v) => serde_json::from_value(v.clone()).context("boards 字段格式错误")?,
         None => Vec::new(),
     };
 
@@ -120,6 +127,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     tx.execute("DELETE FROM tasks", [])?;
     tx.execute("DELETE FROM notes", [])?;
     tx.execute("DELETE FROM links", [])?;
+    tx.execute("DELETE FROM boards", [])?;
     tx.execute("DELETE FROM settings", [])?;
     for t in tasks.iter().chain(converted.iter()) {
         tx.execute(
@@ -152,6 +160,14 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
             params![l.id, l.title, l.kind, l.target, l.sort_order, l.created_at, l.updated_at],
         )?;
     }
+    for b in &boards {
+        tx.execute(BOARD_INSERT, params![b.id, b.name, b.created_at, b.updated_at])?;
+    }
+    // 任何备份导入后保证 default 看板存在
+    tx.execute(
+        "INSERT OR IGNORE INTO boards (id, name, created_at, updated_at) VALUES ('default', '默认看板', '2026-09-09T00:00:00', '2026-09-09T00:00:00')",
+        [],
+    )?;
     for s in &settings {
         tx.execute(SETTING_INSERT, params![s.key, s.value])?;
     }
@@ -191,7 +207,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 5);
+        assert_eq!(doc["version"], 6);
         std::fs::remove_file(&file).ok();
     }
 
@@ -215,7 +231,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 5);
+        assert_eq!(doc["version"], 6);
         std::fs::remove_file(&file).ok();
     }
 
@@ -267,7 +283,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 5);
+        assert_eq!(doc["version"], 6);
         std::fs::remove_file(&file).ok();
     }
 
@@ -297,6 +313,56 @@ mod tests {
             0,
             "旧备份无 links，整库替换后为空"
         );
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_preserves_boards() {
+        let src = mem();
+        src.execute(
+            crate::models::BOARD_INSERT,
+            params!["b1", "工作", "2026-09-09T10:00:00", "2026-09-09T10:00:00"],
+        )
+        .unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-boards-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+
+        let mut dst = mem();
+        import(&mut dst, &file).unwrap();
+        let boards = crate::models::query_all_boards(&dst).unwrap();
+        assert!(boards.iter().any(|b| b.id == "b1" && b.name == "工作"));
+        assert!(boards.iter().any(|b| b.id == "default"), "导入后 default 看板必须存在");
+
+        let text = std::fs::read_to_string(&file).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["version"], 6);
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn import_v5_backup_without_boards_seeds_default() {
+        let file = std::env::temp_dir().join(format!("ws-bk-v5nob-{}.json", std::process::id()));
+        std::fs::write(
+            &file,
+            r#"{
+              "version": 5,
+              "tasks": [],
+              "notes": [],
+              "links": [],
+              "settings": []
+            }"#,
+        )
+        .unwrap();
+
+        let mut c = mem();
+        let n = import(&mut c, &file).unwrap();
+        assert_eq!(n, 0);
+        let ids: Vec<String> = crate::models::query_all_boards(&c)
+            .unwrap()
+            .into_iter()
+            .map(|b| b.id)
+            .collect();
+        assert!(ids.contains(&"default".to_string()), "旧备份导入后需补种子 default");
         std::fs::remove_file(&file).ok();
     }
 
