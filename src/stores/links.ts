@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { api } from '../lib/api';
 import type { Link, LinkInput } from '../types';
 import { applyLinkMove } from '../features/links/links';
@@ -73,9 +72,8 @@ export const useLinksStore = create<LinksState>((set, get) => ({
 
   open: async (link) => {
     try {
-      if (link.kind === 'url') await openUrl(link.target);
-      else if (link.kind === 'path') await openPath(link.target);
-      else await api.linkRun(link.id);
+      if (link.kind === 'command') await api.linkRun(link.id);
+      else await api.linkOpen(link.kind, link.target);
     } catch (e) {
       useUiStore.getState().toast(`打开失败：${e}`, 'error');
     }

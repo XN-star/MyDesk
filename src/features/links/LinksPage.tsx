@@ -108,13 +108,15 @@ function LinkCard({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
       className="link-card"
-      title={`${link.target}\n（拖拽排序，双击打开）`}
+      title={`${link.target}\n（拖住图标排序，双击或点按钮打开）`}
       onDoubleClick={onOpen}
-      {...attributes}
-      {...listeners}
     >
-      <span className="link-icon">{kindIcon(link.kind)}</span>
-      <span className="link-title">{link.title || link.target}</span>
+      <button className="link-open" title="打开" onClick={onOpen}>
+        <span className="link-icon" {...attributes} {...listeners} style={{ cursor: 'grab', touchAction: 'none' }}>
+          {kindIcon(link.kind)}
+        </span>
+        <span className="link-title">{link.title || link.target}</span>
+      </button>
       <span className="link-kind">{KIND_NAMES[link.kind]}</span>
       <button
         className="link-act"

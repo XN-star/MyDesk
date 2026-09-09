@@ -15,6 +15,7 @@ export const api = {
   linkUpdate: (link: Link) => invoke<Link>('link_update', { link }),
   linkDelete: (id: string) => invoke<void>('link_delete', { id }),
   linkMove: (id: string, sortOrder: number) => invoke<void>('link_move', { id, sortOrder }),
+  linkOpen: (kind: string, target: string) => invoke<void>('link_open', { kind, target }),
   linkRun: (id: string) => invoke<void>('link_run', { id }),
   settingsAll: () => invoke<Record<string, string>>('settings_all'),
   settingsSet: (key: string, value: string) => invoke<void>('settings_set', { key, value }),

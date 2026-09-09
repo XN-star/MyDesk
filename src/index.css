@@ -272,7 +272,12 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .link-card:active { cursor: grabbing; }
 .link-card:hover { border-color: var(--accent); }
 .link-icon { font-size: 26px; }
-.link-title { font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-open {
+  background: none; border: none; cursor: pointer; padding: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  max-width: 100%;
+}
+.link-title { font-weight: 600; max-width: 140px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .link-kind { font-size: 11px; color: var(--muted); }
 .link-act {
   position: absolute; top: 4px; background: none; border: none; cursor: pointer;

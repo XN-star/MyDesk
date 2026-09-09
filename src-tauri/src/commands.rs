@@ -202,6 +202,29 @@ pub fn link_move(db: DbState, id: String, sort_order: f64) -> Result<(), String>
     })
 }
 
+/// 用系统默认方式打开网址或路径（url/path 通用）。
+#[tauri::command]
+pub fn link_open(kind: String, target: String) -> Result<(), String> {
+    println!("[link_open] kind={kind} target={target}");
+    match kind.as_str() {
+        "url" => {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", &target])
+                .spawn()
+                .map_err(|e| format!("打开网址失败：{e}"))?;
+            Ok(())
+        }
+        "path" => {
+            std::process::Command::new("cmd")
+                .args(["/C", "start", "", &target])
+                .spawn()
+                .map_err(|e| format!("打开路径失败：{e}"))?;
+            Ok(())
+        }
+        _ => Err(format!("不支持的类型：{kind}")),
+    }
+}
+
 /// 仅 command 类型：本机执行用户自己配置的命令（单机个人应用，风险自担）。
 #[tauri::command]
 pub fn link_run(db: DbState, id: String) -> Result<(), String> {

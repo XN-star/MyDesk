@@ -105,6 +105,7 @@ pub fn run() {
             commands::link_update,
             commands::link_delete,
             commands::link_move,
+            commands::link_open,
             commands::link_run,
             commands::settings_all,
             commands::settings_set,

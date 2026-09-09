@@ -6,16 +6,11 @@ const api = vi.hoisted(() => ({
   linkUpdate: vi.fn(async (l: Record<string, unknown>) => l),
   linkDelete: vi.fn(async () => {}),
   linkMove: vi.fn(async () => {}),
+  linkOpen: vi.fn(async () => {}),
   linkRun: vi.fn(async () => {}),
 }));
 
-const opener = vi.hoisted(() => ({
-  openUrl: vi.fn(async () => {}),
-  openPath: vi.fn(async () => {}),
-}));
-
 vi.mock('../lib/api', () => ({ api }));
-vi.mock('@tauri-apps/plugin-opener', () => opener);
 
 import { useLinksStore } from './links';
 import type { Link } from '../types';
@@ -55,8 +50,8 @@ describe('links store', () => {
     await useLinksStore.getState().open(L({ id: 'u', kind: 'url', target: 'https://a.com' }));
     await useLinksStore.getState().open(L({ id: 'p', kind: 'path', target: 'D:\\' }));
     await useLinksStore.getState().open(L({ id: 'c', kind: 'command', target: 'npm -v' }));
-    expect(opener.openUrl).toHaveBeenCalledWith('https://a.com');
-    expect(opener.openPath).toHaveBeenCalledWith('D:\\');
+    expect(api.linkOpen).toHaveBeenCalledWith('url', 'https://a.com');
+    expect(api.linkOpen).toHaveBeenCalledWith('path', 'D:\\');
     expect(api.linkRun).toHaveBeenCalledWith('c');
   });
 });
