@@ -43,3 +43,8 @@ export function applyMove(
       : t,
   );
 }
+
+/** 过滤出指定看板的任务（保持原顺序）。 */
+export function tasksOfBoard(tasks: Task[], boardId: string): Task[] {
+  return tasks.filter((t) => t.boardId === boardId);
+}

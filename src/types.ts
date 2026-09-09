@@ -23,6 +23,7 @@ export interface TaskInput {
   dueAt?: string | null;
   status?: TaskStatus;
   remindMinutesBefore?: number | null;
+  boardId?: string;
 }
 
 export interface Note {
@@ -55,4 +56,15 @@ export interface LinkInput {
   title: string;
   kind: LinkKind;
   target: string;
+}
+
+export interface Board {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BoardInput {
+  name: string;
 }

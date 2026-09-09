@@ -1,11 +1,15 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, TaskInput, Note, NoteInput, Link, LinkInput } from '../types';
+import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput } from '../types';
 
 export const api = {
   taskList: () => invoke<Task[]>('task_list'),
   taskCreate: (input: TaskInput) => invoke<Task>('task_create', { input }),
   taskUpdate: (task: Task) => invoke<Task>('task_update', { task }),
   taskDelete: (id: string) => invoke<void>('task_delete', { id }),
+  boardList: () => invoke<Board[]>('board_list'),
+  boardCreate: (input: BoardInput) => invoke<Board>('board_create', { input }),
+  boardRename: (id: string, name: string) => invoke<Board>('board_rename', { id, name }),
+  boardDelete: (id: string) => invoke<void>('board_delete', { id }),
   noteList: () => invoke<Note[]>('note_list'),
   noteCreate: (input: NoteInput) => invoke<Note>('note_create', { input }),
   noteUpdate: (note: Note) => invoke<Note>('note_update', { note }),

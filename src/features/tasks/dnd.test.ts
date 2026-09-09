@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyMove } from './dnd';
+import { applyMove, tasksOfBoard } from './dnd';
 import type { Task } from '../../types';
 
 function t(id: string, status: Task['status'], sortOrder: number): Task {
@@ -50,5 +50,14 @@ describe('applyMove', () => {
   it('id 不存在时原样返回', () => {
     const tasks = [t('a', 'todo', 100)];
     expect(applyMove(tasks, 'nope', 'doing', 0)).toBe(tasks);
+  });
+});
+
+describe('tasksOfBoard', () => {
+  it('只保留指定看板任务并保持原顺序', () => {
+    const a = t('a', 'todo', 100);
+    const b = { ...t('b', 'todo', 100), boardId: 'work' };
+    const c = { ...t('c', 'doing', 100), boardId: 'work' };
+    expect(tasksOfBoard([a, b, c], 'work')).toEqual([b, c]);
   });
 });
