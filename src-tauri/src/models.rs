@@ -1,4 +1,4 @@
-use rusqlite::{Connection, Row};
+use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 
 pub const TASK_COLS: &str = "id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at";
@@ -10,6 +10,9 @@ pub const NOTE_INSERT: &str =
 pub const LINK_COLS: &str = "id, title, kind, target, sort_order, created_at, updated_at";
 pub const LINK_INSERT: &str =
     "INSERT INTO links (id, title, kind, target, sort_order, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7)";
+pub const BOARD_COLS: &str = "id, name, created_at, updated_at";
+pub const BOARD_INSERT: &str =
+    "INSERT INTO boards (id, name, created_at, updated_at) VALUES (?1,?2,?3,?4)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +46,8 @@ pub struct TaskInput {
     pub status: String,
     #[serde(default = "dft_remind")]
     pub remind_minutes_before: Option<i64>,
+    #[serde(default)]
+    pub board_id: Option<String>,
 }
 
 fn dft_priority() -> i64 {
@@ -103,6 +108,21 @@ pub struct LinkInput {
 
 fn dft_kind() -> String {
     "url".into()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Board {
+    pub id: String,
+    pub name: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BoardInput {
+    pub name: String,
 }
 
 pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
@@ -173,6 +193,29 @@ pub fn query_all_links(c: &Connection) -> rusqlite::Result<Vec<Link>> {
     let mut stmt = c.prepare(&format!("SELECT {LINK_COLS} FROM links ORDER BY sort_order"))?;
     let rows = stmt.query_map([], link_from_row)?;
     rows.collect()
+}
+
+pub fn board_from_row(r: &Row) -> rusqlite::Result<Board> {
+    Ok(Board {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        created_at: r.get(2)?,
+        updated_at: r.get(3)?,
+    })
+}
+
+pub fn query_all_boards(c: &Connection) -> rusqlite::Result<Vec<Board>> {
+    let mut stmt = c.prepare(&format!("SELECT {BOARD_COLS} FROM boards ORDER BY created_at"))?;
+    let rows = stmt.query_map([], board_from_row)?;
+    rows.collect()
+}
+
+pub fn query_one_board(c: &Connection, id: &str) -> rusqlite::Result<Board> {
+    c.query_row(
+        &format!("SELECT {BOARD_COLS} FROM boards WHERE id=?1"),
+        params![id],
+        board_from_row,
+    )
 }
 
 #[cfg(test)]
@@ -285,5 +328,28 @@ mod tests {
         let input: LinkInput = serde_json::from_str(json).unwrap();
         assert_eq!(input.kind, "url");
         assert_eq!(input.target, "C:\\doc");
+    }
+
+    #[test]
+    fn board_roundtrip_and_order() {
+        let c = mem();
+        c.execute(BOARD_INSERT, params!["b2", "工作", "2026-09-09T10:00:00", "2026-09-09T10:00:00"]).unwrap();
+        let got = query_all_boards(&c).unwrap();
+        // mem() 迁移时已种子 default（created_at 更早），排序在首位
+        let ids: Vec<&str> = got.iter().map(|b| b.id.as_str()).collect();
+        assert_eq!(ids, vec!["default", "b2"]);
+        assert_eq!(got[0].name, "默认看板");
+        let one = query_one_board(&c, "b2").unwrap();
+        assert_eq!(one.name, "工作");
+    }
+
+    #[test]
+    fn task_input_board_default() {
+        let json = r#"{"title":"买牛奶"}"#;
+        let input: TaskInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.board_id, None);
+        let json2 = r#"{"title":"工作","boardId":"b2"}"#;
+        let input2: TaskInput = serde_json::from_str(json2).unwrap();
+        assert_eq!(input2.board_id.as_deref(), Some("b2"));
     }
 }

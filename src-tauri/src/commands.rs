@@ -35,7 +35,7 @@ pub fn task_create(db: DbState, input: TaskInput) -> Result<Task, String> {
         )?;
         let t = Task {
             id: Uuid::new_v4().to_string(),
-            board_id: "default".into(),
+            board_id: input.board_id.unwrap_or_else(|| "default".into()),
             title: input.title,
             description: input.description,
             status: input.status,
