@@ -1,6 +1,58 @@
 use rusqlite::Connection;
 
-/// v4 建表语句（新库直接为此形态）：tasks + notes。
+/// v5 建表语句（新库直接为此形态）：tasks + notes + links。
+pub const SCHEMA_V5: &str = "
+CREATE TABLE IF NOT EXISTS tasks (
+  id          TEXT PRIMARY KEY,
+  board_id    TEXT NOT NULL DEFAULT 'default',
+  title       TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'todo',
+  priority    INTEGER NOT NULL DEFAULT 1,
+  due_at      TEXT,
+  sort_order  REAL NOT NULL,
+  done_at     TEXT,
+  remind_minutes_before INTEGER,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notes (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  content    TEXT NOT NULL DEFAULT '',
+  pinned     INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS links (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  kind       TEXT NOT NULL DEFAULT 'url',
+  target     TEXT NOT NULL,
+  sort_order REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+";
+
+/// v4→v5：新增 links 表。
+pub const MIGRATE_V5: &str = "
+CREATE TABLE IF NOT EXISTS links (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  kind       TEXT NOT NULL DEFAULT 'url',
+  target     TEXT NOT NULL,
+  sort_order REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+";
+
+/// v4 建表语句，仅用于迁移测试中构造 v4 库。
 pub const SCHEMA_V4: &str = "
 CREATE TABLE IF NOT EXISTS tasks (
   id          TEXT PRIMARY KEY,
@@ -144,7 +196,7 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
-        // 全新库：直接建 v4 形态。
+        // 全新库：直接建 v5 形态。
         // version==0 且已存在 events/tasks 表的极端情况（手动建的 v1/v2 库）按旧版处理。
         let has_events: bool = table_exists(conn, "events")?;
         let has_tasks: bool = table_exists(conn, "tasks")?;
@@ -156,8 +208,8 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             conn.execute_batch(SCHEMA_V2)?;
             upgrade_to_v3(conn)?;
         } else {
-            conn.execute_batch(SCHEMA_V4)?;
-            conn.pragma_update(None, "user_version", 4)?;
+            conn.execute_batch(SCHEMA_V5)?;
+            conn.pragma_update(None, "user_version", 5)?;
             return Ok(());
         }
     } else if version == 1 {
@@ -167,13 +219,21 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         upgrade_to_v3(conn)?;
     }
     upgrade_to_v4(conn)?;
-    conn.pragma_update(None, "user_version", 4)?;
+    upgrade_to_v5(conn)?;
+    conn.pragma_update(None, "user_version", 5)?;
     Ok(())
 }
 
 fn upgrade_to_v4(conn: &Connection) -> rusqlite::Result<()> {
     if !table_exists(conn, "notes")? {
         conn.execute_batch(MIGRATE_V3_TO_V4)?;
+    }
+    Ok(())
+}
+
+fn upgrade_to_v5(conn: &Connection) -> rusqlite::Result<()> {
+    if !table_exists(conn, "links")? {
+        conn.execute_batch(MIGRATE_V5)?;
     }
     Ok(())
 }
@@ -228,20 +288,21 @@ mod tests {
     }
 
     #[test]
-    fn fresh_db_creates_all_tables_at_v4() {
+    fn fresh_db_creates_all_tables_at_v5() {
         let c = mem();
         let n: i64 = c
             .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks','settings','notes')",
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks','settings','notes','links')",
                 [],
                 |r| r.get(0),
             )
             .unwrap();
-        assert_eq!(n, 3);
+        assert_eq!(n, 4);
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 4);
+        assert_eq!(v, 5);
         assert!(column_exists(&c, "tasks", "remind_minutes_before").unwrap());
         assert!(column_exists(&c, "notes", "pinned").unwrap());
+        assert!(column_exists(&c, "links", "target").unwrap());
     }
 
     #[test]
@@ -252,7 +313,7 @@ mod tests {
     }
 
     #[test]
-    fn v1_db_migrates_events_into_tasks_then_v4() {
+    fn v1_db_migrates_events_into_tasks_then_v5() {
         let c = rusqlite::Connection::open_in_memory().unwrap();
         c.execute_batch(SCHEMA_V1).unwrap();
         c.execute_batch("PRAGMA user_version = 1;").unwrap();
@@ -265,7 +326,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 4);
+        assert_eq!(v, 5);
         let events: i64 = c
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
@@ -282,7 +343,7 @@ mod tests {
     }
 
     #[test]
-    fn v2_db_upgrades_to_v4() {
+    fn v2_db_upgrades_to_v5() {
         let c = rusqlite::Connection::open_in_memory().unwrap();
         c.execute_batch(SCHEMA_V2).unwrap();
         c.execute_batch("PRAGMA user_version = 2;").unwrap();
@@ -295,7 +356,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 4);
+        assert_eq!(v, 5);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -307,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn v3_db_upgrades_to_v4_keeps_tasks() {
+    fn v3_db_upgrades_to_v5_keeps_tasks() {
         let c = rusqlite::Connection::open_in_memory().unwrap();
         c.execute_batch(SCHEMA_V3).unwrap();
         c.execute_batch("PRAGMA user_version = 3;").unwrap();
@@ -320,11 +381,42 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 4);
+        assert_eq!(v, 5);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(kept, "旧任务");
         assert!(table_exists(&c, "notes").unwrap());
+    }
+
+    #[test]
+    fn v4_db_upgrades_to_v5_keeps_data() {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch(SCHEMA_V4).unwrap();
+        c.execute_batch("PRAGMA user_version = 4;").unwrap();
+        c.execute(
+            "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at) VALUES ('t1', 'default', '旧任务', '', 'todo', 1, NULL, 100.0, NULL, 0, '2026-09-08T10:00:00', '2026-09-08T10:00:00')",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO notes (id, title, content, pinned, created_at, updated_at) VALUES ('n1', '旧笔记', '', 0, '2026-09-08T10:00:00', '2026-09-08T10:00:00')",
+            [],
+        )
+        .unwrap();
+
+        migrate(&c).unwrap();
+
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 5);
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
+            1
+        );
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM notes", [], |r| r.get::<_, i64>(0)).unwrap(),
+            1
+        );
+        assert!(table_exists(&c, "links").unwrap());
     }
 }
