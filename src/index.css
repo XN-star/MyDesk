@@ -310,3 +310,9 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 }
 .ov-chip:hover { border-color: var(--accent); }
 .overview-more { align-self: flex-start; margin-top: 4px; }
+
+/* 看板切换器 */
+.kanban-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.board-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.board-bar select { width: 200px; }
+.board-bar .kanban { flex: 1; min-height: 0; }

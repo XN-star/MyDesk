@@ -9,6 +9,7 @@ import TaskDrawer from './features/tasks/TaskDrawer';
 import SettingsPage from './features/settings/SettingsPage';
 import { enabledModules } from './modules/registry';
 import { applyTheme } from './lib/theme';
+import { useBoardsStore } from './stores/boards';
 import { useSettingsStore } from './stores/settings';
 import { useTaskStore } from './stores/tasks';
 import { useUiStore } from './stores/ui';
@@ -24,6 +25,7 @@ export default function App() {
     useSettingsStore.getState().load().then(() => {
       useTaskStore.getState().load();
     });
+    useBoardsStore.getState().load();
   }, []);
 
   useEffect(() => {

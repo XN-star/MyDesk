@@ -3,6 +3,7 @@ import DatePicker from '../../components/DatePicker';
 import TimeSpinner from '../../components/TimeSpinner';
 import { dateOf } from '../../lib/format';
 import { REMIND_OPTIONS, remindToNumber, remindToString } from '../../lib/remind';
+import { useBoardsStore } from '../../stores/boards';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
 
@@ -31,6 +32,9 @@ export default function TaskDrawer() {
   const [status, setStatus] = useState(
     editing?.status ?? (drawer.mode === 'create' ? drawer.status : 'todo'),
   );
+  const boards = useBoardsStore((s) => s.boards);
+  const activeBoardId = useBoardsStore((s) => s.activeBoardId);
+  const [boardId, setBoardId] = useState(editing?.boardId ?? activeBoardId);
 
   function buildDueAt(): string | null {
     if (!hasDue || !dueDate) return null;
@@ -58,6 +62,7 @@ export default function TaskDrawer() {
           dueAt,
           status,
           remindMinutesBefore,
+          boardId,
         });
       } else if (editing) {
         await update({
@@ -68,6 +73,7 @@ export default function TaskDrawer() {
           dueAt,
           status,
           remindMinutesBefore,
+          boardId,
         });
       }
       toast('已保存');
@@ -157,6 +163,16 @@ export default function TaskDrawer() {
             <option value="todo">待办</option>
             <option value="doing">进行中</option>
             <option value="done">已完成</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>所属看板</label>
+          <select className="input" value={boardId} onChange={(e) => setBoardId(e.target.value)}>
+            {boards.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
           </select>
         </div>
         <div className="drawer-actions">
