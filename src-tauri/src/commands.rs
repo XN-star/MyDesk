@@ -100,6 +100,53 @@ pub fn task_delete(db: DbState, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn board_list(db: DbState) -> Result<Vec<Board>, String> {
+    with_conn(db, query_all_boards)
+}
+
+#[tauri::command]
+pub fn board_create(db: DbState, input: BoardInput) -> Result<Board, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        let b = Board {
+            id: Uuid::new_v4().to_string(),
+            name: input.name,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        c.execute(BOARD_INSERT, params![b.id, b.name, b.created_at, b.updated_at])?;
+        Ok(b)
+    })
+}
+
+#[tauri::command]
+pub fn board_rename(db: DbState, id: String, name: String) -> Result<Board, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        c.execute(
+            "UPDATE boards SET name=?2, updated_at=?3 WHERE id=?1",
+            params![id, name, now],
+        )?;
+        Ok(Board { name, updated_at: now, ..query_one_board(c, &id)? })
+    })
+}
+
+#[tauri::command]
+pub fn board_delete(db: DbState, id: String) -> Result<(), String> {
+    if id == "default" {
+        return Err("默认看板不能删除".into());
+    }
+    let mut conn = db.0.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM tasks WHERE board_id=?1", params![id])
+        .map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM boards WHERE id=?1", params![id])
+        .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub fn note_list(db: DbState) -> Result<Vec<Note>, String> {
     with_conn(db, query_all_notes)
 }
