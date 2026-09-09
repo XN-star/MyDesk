@@ -7,6 +7,9 @@ pub const SETTING_INSERT: &str = "INSERT INTO settings (key, value) VALUES (?1, 
 pub const NOTE_COLS: &str = "id, title, content, pinned, created_at, updated_at";
 pub const NOTE_INSERT: &str =
     "INSERT INTO notes (id, title, content, pinned, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6)";
+pub const LINK_COLS: &str = "id, title, kind, target, sort_order, created_at, updated_at";
+pub const LINK_INSERT: &str =
+    "INSERT INTO links (id, title, kind, target, sort_order, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +80,31 @@ pub struct NoteInput {
     pub content: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Link {
+    pub id: String,
+    pub title: String,
+    pub kind: String,
+    pub target: String,
+    pub sort_order: f64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkInput {
+    pub title: String,
+    #[serde(default = "dft_kind")]
+    pub kind: String,
+    pub target: String,
+}
+
+fn dft_kind() -> String {
+    "url".into()
+}
+
 pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
@@ -126,6 +154,24 @@ pub fn query_all_notes(c: &Connection) -> rusqlite::Result<Vec<Note>> {
     let mut stmt =
         c.prepare(&format!("SELECT {NOTE_COLS} FROM notes ORDER BY pinned DESC, updated_at DESC"))?;
     let rows = stmt.query_map([], note_from_row)?;
+    rows.collect()
+}
+
+pub fn link_from_row(r: &Row) -> rusqlite::Result<Link> {
+    Ok(Link {
+        id: r.get(0)?,
+        title: r.get(1)?,
+        kind: r.get(2)?,
+        target: r.get(3)?,
+        sort_order: r.get(4)?,
+        created_at: r.get(5)?,
+        updated_at: r.get(6)?,
+    })
+}
+
+pub fn query_all_links(c: &Connection) -> rusqlite::Result<Vec<Link>> {
+    let mut stmt = c.prepare(&format!("SELECT {LINK_COLS} FROM links ORDER BY sort_order"))?;
+    let rows = stmt.query_map([], link_from_row)?;
     rows.collect()
 }
 
@@ -204,5 +250,40 @@ mod tests {
         let input: NoteInput = serde_json::from_str(json).unwrap();
         assert_eq!(input.title, "随手记");
         assert_eq!(input.content, "");
+    }
+
+    #[test]
+    fn link_roundtrip_via_row_mapping() {
+        let c = mem();
+        c.execute(
+            LINK_INSERT,
+            params!["l1", "Gmail", "url", "https://mail.google.com", 100.0, "2026-09-08T10:00:00", "2026-09-08T10:00:00"],
+        )
+        .unwrap();
+        let got = query_all_links(&c).unwrap();
+        assert_eq!(got.len(), 1);
+        assert_eq!(got[0].id, "l1");
+        assert_eq!(got[0].title, "Gmail");
+        assert_eq!(got[0].kind, "url");
+        assert_eq!(got[0].target, "https://mail.google.com");
+        assert_eq!(got[0].sort_order, 100.0);
+    }
+
+    #[test]
+    fn links_order_by_sort_order() {
+        let c = mem();
+        c.execute(LINK_INSERT, params!["b", "第二", "url", "https://b.example.com", 200.0, "2026-09-08T10:00:00", "2026-09-08T10:00:00"]).unwrap();
+        c.execute(LINK_INSERT, params!["a", "第一", "path", "C:\\dir", 100.0, "2026-09-08T10:00:00", "2026-09-08T10:00:00"]).unwrap();
+        let got = query_all_links(&c).unwrap();
+        let ids: Vec<&str> = got.iter().map(|l| l.id.as_str()).collect();
+        assert_eq!(ids, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn link_input_defaults() {
+        let json = r#"{"title":"文档","target":"C:\\doc"}"#;
+        let input: LinkInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.kind, "url");
+        assert_eq!(input.target, "C:\\doc");
     }
 }
