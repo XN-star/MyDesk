@@ -2,6 +2,7 @@ import type { Module } from './types';
 import KanbanPage from '../features/tasks/KanbanPage';
 import CalendarPage from '../features/calendar/CalendarPage';
 import NotesPage from '../features/notes/NotesPage';
+import LinksPage from '../features/links/LinksPage';
 
 export const MODULES: Module[] = [
   {
@@ -30,6 +31,15 @@ export const MODULES: Module[] = [
     defaultEnabled: true,
     route: '/notes',
     component: NotesPage,
+  },
+  {
+    id: 'links',
+    name: '快捷入口',
+    icon: '⚡',
+    description: '网址/文件/命令快速启动',
+    defaultEnabled: true,
+    route: '/links',
+    component: LinksPage,
   },
 ];
 

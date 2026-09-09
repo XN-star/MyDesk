@@ -256,3 +256,29 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .notes-content:focus { border-color: var(--accent); }
 .notes-status { align-self: flex-end; font-size: 12px; color: var(--muted); }
 .notes-empty { display: grid; place-items: center; height: 100%; color: var(--muted); text-align: center; }
+
+/* 快捷入口网格 */
+.links-page { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
+.links-toolbar { display: flex; gap: 8px; }
+.links-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px; align-content: start; overflow-y: auto; flex: 1;
+}
+.link-card {
+  position: relative; background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 10px 10px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  cursor: grab; text-align: center; min-height: 96px;
+}
+.link-card:active { cursor: grabbing; }
+.link-card:hover { border-color: var(--accent); }
+.link-icon { font-size: 26px; }
+.link-title { font-weight: 600; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.link-kind { font-size: 11px; color: var(--muted); }
+.link-act {
+  position: absolute; top: 4px; background: none; border: none; cursor: pointer;
+  color: var(--muted); padding: 2px; font-size: 12px; display: none;
+}
+.link-card:hover .link-act { display: block; }
+.link-act:hover { color: var(--accent); }
+.link-act:last-child { right: 4px; }
+.link-act:nth-last-child(2) { right: 28px; }
