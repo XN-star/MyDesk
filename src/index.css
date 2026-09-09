@@ -287,3 +287,26 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .link-act:hover { color: var(--accent); }
 .link-act:last-child { right: 4px; }
 .link-act:nth-last-child(2) { right: 28px; }
+
+/* 概览 */
+.overview { display: flex; flex-direction: column; gap: 16px; }
+.overview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.overview-card { padding: 16px 18px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 10px; }
+.overview-card:hover { border-color: var(--accent); }
+.overview-card h3 { margin: 0; font-size: 14px; }
+.overview-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; color: var(--muted); }
+.overview-stats b { font-size: 20px; margin-right: 6px; color: var(--text); }
+.overdue-num b { color: var(--danger); }
+.overview-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.overview-list li { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.ov-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ov-time { color: var(--muted); flex: none; }
+.overview-links { cursor: default; }
+.overview-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ov-chip {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+  padding: 6px 14px; cursor: pointer; font-size: 13px; max-width: 220px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ov-chip:hover { border-color: var(--accent); }
+.overview-more { align-self: flex-start; margin-top: 4px; }

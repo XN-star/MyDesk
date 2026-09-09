@@ -3,8 +3,18 @@ import KanbanPage from '../features/tasks/KanbanPage';
 import CalendarPage from '../features/calendar/CalendarPage';
 import NotesPage from '../features/notes/NotesPage';
 import LinksPage from '../features/links/LinksPage';
+import OverviewPage from '../features/overview/OverviewPage';
 
 export const MODULES: Module[] = [
+  {
+    id: 'overview',
+    name: '概览',
+    icon: '◈',
+    description: '今日信息一览',
+    defaultEnabled: true,
+    route: '/overview',
+    component: OverviewPage,
+  },
   {
     id: 'tasks',
     name: '任务看板',
