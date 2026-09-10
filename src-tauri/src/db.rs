@@ -56,6 +56,135 @@ CREATE TABLE IF NOT EXISTS boards (
 INSERT OR IGNORE INTO boards (id, name, created_at, updated_at) VALUES ('default', '默认看板', '2026-09-09T00:00:00', '2026-09-09T00:00:00');
 ";
 
+/// v7 建表语句（新库直接为此形态）：v6 全部 + habits + habit_logs；tasks 含 repeat 列。
+pub const SCHEMA_V7: &str = "
+CREATE TABLE IF NOT EXISTS tasks (
+  id          TEXT PRIMARY KEY,
+  board_id    TEXT NOT NULL DEFAULT 'default',
+  title       TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'todo',
+  priority    INTEGER NOT NULL DEFAULT 1,
+  due_at      TEXT,
+  sort_order  REAL NOT NULL,
+  done_at     TEXT,
+  remind_minutes_before INTEGER,
+  repeat      TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notes (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  content    TEXT NOT NULL DEFAULT '',
+  pinned     INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS links (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  kind       TEXT NOT NULL DEFAULT 'url',
+  target     TEXT NOT NULL,
+  sort_order REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS boards (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habits (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  frequency  TEXT NOT NULL DEFAULT 'daily',
+  reminder   TEXT,
+  archived   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habit_logs (
+  id       TEXT PRIMARY KEY,
+  habit_id TEXT NOT NULL,
+  date     TEXT NOT NULL,
+  value    INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(habit_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs (habit_id, date);
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+";
+
+/// v6→v7：新增 habits/habit_logs 表与 tasks.repeat 列。
+pub const MIGRATE_V7: &str = "
+CREATE TABLE IF NOT EXISTS habits (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  frequency  TEXT NOT NULL DEFAULT 'daily',
+  reminder   TEXT,
+  archived   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habit_logs (
+  id       TEXT PRIMARY KEY,
+  habit_id TEXT NOT NULL,
+  date     TEXT NOT NULL,
+  value    INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(habit_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs (habit_id, date);
+";
+
+/// v6 建表语句，仅用于迁移测试中构造 v6 库。
+pub const SCHEMA_V6_FULL: &str = "
+CREATE TABLE IF NOT EXISTS tasks (
+  id          TEXT PRIMARY KEY,
+  board_id    TEXT NOT NULL DEFAULT 'default',
+  title       TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'todo',
+  priority    INTEGER NOT NULL DEFAULT 1,
+  due_at      TEXT,
+  sort_order  REAL NOT NULL,
+  done_at     TEXT,
+  remind_minutes_before INTEGER,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notes (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  content    TEXT NOT NULL DEFAULT '',
+  pinned     INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS links (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  kind       TEXT NOT NULL DEFAULT 'url',
+  target     TEXT NOT NULL,
+  sort_order REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS boards (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+";
+
 /// v5 建表语句，仅用于迁移测试中构造 v5 库。
 pub const SCHEMA_V5: &str = "
 CREATE TABLE IF NOT EXISTS tasks (
@@ -252,7 +381,7 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
-        // 全新库：直接建 v6 形态。
+        // 全新库：直接建 v7 形态。
         // version==0 且已存在 events/tasks 表的极端情况（手动建的 v1/v2 库）按旧版处理。
         let has_events: bool = table_exists(conn, "events")?;
         let has_tasks: bool = table_exists(conn, "tasks")?;
@@ -264,9 +393,9 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             conn.execute_batch(SCHEMA_V2)?;
             upgrade_to_v3(conn)?;
         } else {
-            conn.execute_batch(SCHEMA_V6)?;
+            conn.execute_batch(SCHEMA_V7)?;
             seed_default_board(conn)?;
-            conn.pragma_update(None, "user_version", 6)?;
+            conn.pragma_update(None, "user_version", 7)?;
             return Ok(());
         }
     } else if version == 1 {
@@ -278,7 +407,8 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     upgrade_to_v4(conn)?;
     upgrade_to_v5(conn)?;
     upgrade_to_v6(conn)?;
-    conn.pragma_update(None, "user_version", 6)?;
+    upgrade_to_v7(conn)?;
+    conn.pragma_update(None, "user_version", 7)?;
     Ok(())
 }
 
@@ -310,6 +440,16 @@ fn upgrade_to_v6(conn: &Connection) -> rusqlite::Result<()> {
         conn.execute_batch(MIGRATE_V6)?;
     } else {
         seed_default_board(conn)?;
+    }
+    Ok(())
+}
+
+fn upgrade_to_v7(conn: &Connection) -> rusqlite::Result<()> {
+    if !table_exists(conn, "habits")? {
+        conn.execute_batch(MIGRATE_V7)?;
+    }
+    if !column_exists(conn, "tasks", "repeat")? {
+        conn.execute_batch("ALTER TABLE tasks ADD COLUMN repeat TEXT;")?;
     }
     Ok(())
 }
@@ -375,7 +515,7 @@ mod tests {
             .unwrap();
         assert_eq!(n, 5);
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 6);
+        assert_eq!(v, 7);
         assert!(column_exists(&c, "tasks", "remind_minutes_before").unwrap());
         assert!(column_exists(&c, "notes", "pinned").unwrap());
         assert!(column_exists(&c, "links", "target").unwrap());
@@ -402,7 +542,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 6);
+        assert_eq!(v, 7);
         let events: i64 = c
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
@@ -432,7 +572,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 6);
+        assert_eq!(v, 7);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -457,7 +597,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 6);
+        assert_eq!(v, 7);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -484,7 +624,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 6);
+        assert_eq!(v, 7);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
@@ -510,7 +650,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 6);
+        assert_eq!(v, 7);
         let name: String = c
             .query_row("SELECT name FROM boards WHERE id='default'", [], |r| r.get(0))
             .unwrap();
@@ -519,5 +659,59 @@ mod tests {
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(kept, "旧任务");
+    }
+
+    #[test]
+    fn fresh_db_creates_all_tables_at_v7() {
+        let c = mem();
+        let n: i64 = c
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks','settings','notes','links','boards','habits','habit_logs')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 7);
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 7);
+        assert!(column_exists(&c, "tasks", "repeat").unwrap());
+        assert!(column_exists(&c, "habits", "reminder").unwrap());
+        assert!(column_exists(&c, "habit_logs", "value").unwrap());
+    }
+
+    #[test]
+    fn v6_db_upgrades_to_v7_keeps_data() {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch(SCHEMA_V6_FULL).unwrap();
+        c.execute_batch("PRAGMA user_version = 6;").unwrap();
+        c.execute(
+            "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at) VALUES ('t1', 'default', '旧任务', '', 'todo', 1, NULL, 100.0, NULL, 0, '2026-09-09T10:00:00', '2026-09-09T10:00:00')",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO boards (id, name, created_at, updated_at) VALUES ('b1', '工作', '2026-09-09T10:00:00', '2026-09-09T10:00:00')",
+            [],
+        )
+        .unwrap();
+
+        migrate(&c).unwrap();
+
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 7);
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
+            1
+        );
+        let repeat: Option<String> = c
+            .query_row("SELECT repeat FROM tasks WHERE id='t1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(repeat, None, "迁移后旧任务默认不重复");
+        assert!(table_exists(&c, "habits").unwrap());
+        assert!(table_exists(&c, "habit_logs").unwrap());
+        let board: String = c
+            .query_row("SELECT name FROM boards WHERE id='b1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(board, "工作");
     }
 }
