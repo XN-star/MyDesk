@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Note } from '../../types';
-import { noteExcerpt, searchNotes, sortNotes, splitPinned } from './notes';
+import { dailyNoteTitle, findDailyNote, noteExcerpt, searchNotes, sortNotes, splitPinned } from './notes';
 
 function note(partial: Partial<Note>): Note {
   return {
@@ -66,5 +66,32 @@ describe('sortNotes', () => {
       note({ id: 'p', pinned: true, updatedAt: '2026-09-08T08:00:00' }),
     ]);
     expect(sorted.map((n) => n.id)).toEqual(['p', 'b', 'a']);
+  });
+});
+
+describe('dailyNoteTitle', () => {
+  it('日期转为「M月d日」标题（去前导零）', () => {
+    expect(dailyNoteTitle('2026-09-10')).toBe('9月10日');
+    expect(dailyNoteTitle('2026-12-01')).toBe('12月1日');
+  });
+});
+
+describe('findDailyNote', () => {
+  it('按标题匹配返回当日笔记', () => {
+    const notes = [
+      note({ id: 'a', title: '购物清单' }),
+      note({ id: 'b', title: '9月10日' }),
+    ];
+    expect(findDailyNote(notes, '2026-09-10')?.id).toBe('b');
+  });
+
+  it('不存在时返回 null', () => {
+    expect(findDailyNote([note({ id: 'a', title: '购物清单' })], '2026-09-10')).toBeNull();
+    expect(findDailyNote([], '2026-09-10')).toBeNull();
+  });
+
+  it('命中第一条（依赖后端排序输入）', () => {
+    const notes = [note({ id: 'first', title: '9月10日' }), note({ id: 'second', title: '9月10日' })];
+    expect(findDailyNote(notes, '2026-09-10')?.id).toBe('first');
   });
 });

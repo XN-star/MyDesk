@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
 import type { Note } from '../types';
-import { sortNotes } from '../features/notes/notes';
+import { dailyNoteTitle, findDailyNote, sortNotes } from '../features/notes/notes';
 import { useUiStore } from './ui';
 
 const AUTOSAVE_DELAY_MS = 1000;
@@ -17,6 +17,7 @@ interface NotesState {
   togglePin: (id: string) => Promise<void>;
   remove: (id: string) => Promise<void>;
   flush: () => Promise<void>;
+  openOrCreateDaily: (date: string) => Promise<void>;
 }
 
 // 防抖计时器与待保存笔记 id 存在模块级（单实例应用，无需放 state）。
@@ -131,5 +132,25 @@ export const useNotesStore = create<NotesState>((set, get) => ({
         selectedId: s.selectedId === id ? notes[0]?.id ?? null : s.selectedId,
       };
     });
+  },
+
+  openOrCreateDaily: async (date) => {
+    await get().flush();
+    try {
+      await get().load();
+    } catch {
+      // load 内部已 toast，继续用当前数据兜底
+    }
+    const existing = findDailyNote(get().notes, date);
+    if (existing) {
+      set({ selectedId: existing.id });
+      return;
+    }
+    try {
+      const n = await api.noteCreate({ title: dailyNoteTitle(date), content: '' });
+      set((s) => ({ notes: sortNotes([n, ...s.notes]), selectedId: n.id }));
+    } catch (e) {
+      useUiStore.getState().toast(`创建每日笔记失败：${e}`, 'error');
+    }
   },
 }));

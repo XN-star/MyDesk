@@ -2,12 +2,20 @@ import { useState } from 'react';
 import TimeSpinner from '../../components/TimeSpinner';
 import { fromDate } from '../../lib/format';
 import { REMIND_OPTIONS, remindToNumber } from '../../lib/remind';
+import { useNotesStore } from '../../stores/notes';
+import { useSettingsStore } from '../../stores/settings';
 import { useTaskStore } from '../../stores/tasks';
+import { useUiStore } from '../../stores/ui';
+import { findDailyNote } from '../notes/notes';
 import { tasksForDate } from './selectors';
 
 export default function DayPanel({ date }: { date: string }) {
   const tasks = useTaskStore((s) => s.tasks);
   const dayTasks = tasksForDate(date, tasks);
+  const notes = useNotesStore((s) => s.notes);
+  const dailyNote = findDailyNote(notes, date);
+  const enabledIds = useSettingsStore((s) => s.enabledModules);
+  const notesEnabled = enabledIds.includes('notes');
 
   const [title, setTitle] = useState('');
   const [time, setTime] = useState('09:00');
@@ -32,6 +40,11 @@ export default function DayPanel({ date }: { date: string }) {
       status: done ? 'done' : 'todo',
       doneAt: done ? fromDate(new Date()) : null,
     });
+  }
+
+  async function openDailyNote() {
+    await useNotesStore.getState().openOrCreateDaily(date);
+    useUiStore.getState().setPage('notes');
   }
 
   return (
@@ -87,6 +100,13 @@ export default function DayPanel({ date }: { date: string }) {
           </div>
           <div className="day-hint">到该时刻会弹出系统提醒，并按此刻在日历排序</div>
         </div>
+      </section>
+      <section>
+        {notesEnabled && (
+          <button className="btn day-note-btn" onClick={() => void openDailyNote()}>
+            📝 {dailyNote ? '打开当日笔记' : '创建当日笔记'}
+          </button>
+        )}
       </section>
     </div>
   );

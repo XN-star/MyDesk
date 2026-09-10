@@ -145,6 +145,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .tdot.done { opacity: .35; }
 .edot { background: var(--accent); }
 .day-panel { padding: 16px; overflow-y: auto; }
+.day-note-btn { width: 100%; margin-top: 8px; }
 .day-panel-title { font-weight: 600; margin-bottom: 8px; }
 .day-panel h4 { margin: 12px 0 6px; font-size: 13px; color: var(--muted); }
 .day-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--border); }

@@ -28,3 +28,15 @@ export function sortNotes(notes: Note[]): Note[] {
     return b.updatedAt.localeCompare(a.updatedAt);
   });
 }
+
+/** 每日笔记的约定标题：'2026-09-10' → '9月10日'（月/日去前导零）。 */
+export function dailyNoteTitle(date: string): string {
+  const [, m, d] = date.split('-');
+  return `${Number(m)}月${Number(d)}日`;
+}
+
+/** 当日笔记：按标题匹配的第一条（依赖后端已排序的输入）。 */
+export function findDailyNote(notes: Note[], date: string): Note | null {
+  const title = dailyNoteTitle(date);
+  return notes.find((n) => n.title === title) ?? null;
+}
