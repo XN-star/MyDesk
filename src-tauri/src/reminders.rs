@@ -55,7 +55,7 @@ fn trigger_at(due_at: &str, remind_minutes: i64) -> Option<String> {
     )
 }
 
-fn parse_naive(s: &str) -> Option<NaiveDateTime> {
+pub fn parse_naive(s: &str) -> Option<NaiveDateTime> {
     NaiveDateTime::parse_from_str(s, FMT).ok()
 }
 

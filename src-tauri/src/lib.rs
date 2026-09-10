@@ -4,13 +4,16 @@ mod db;
 mod models;
 mod reminders;
 mod shortcut;
+mod timer;
 
 use std::collections::HashSet;
+use std::sync::atomic::AtomicBool;
 use std::sync::Mutex;
 use tauri::Emitter;
 use tauri::Manager;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{TrayIcon, TrayIconBuilder};
+use timer::TimerState;
 
 pub struct Db(pub Mutex<rusqlite::Connection>);
 pub struct Notified(pub Mutex<HashSet<String>>);
@@ -71,6 +74,15 @@ pub fn run() {
                 })
                 .build(app)?;
 
+            // 计时心跳：1s 轮询刷托盘 tooltip + 番茄状态机
+            let tray: TrayIcon = app.tray_by_id("main-tray").expect("main-tray");
+            timer::start(app.handle().clone(), tray);
+            app.manage(TimerState {
+                active: AtomicBool::new(false),
+                pomodoro: Mutex::new(None),
+                task_id: Mutex::new(None),
+            });
+
             // 窗口配置 create=false：状态注册完成后手动创建，
             // 避免前端过早 invoke 时 Db 状态尚未注册。
             for window_config in app.config().app.windows.iter() {
@@ -119,6 +131,13 @@ pub fn run() {
             commands::link_run,
             commands::settings_all,
             commands::settings_set,
+            commands::timer_start,
+            commands::timer_stop,
+            commands::timer_status,
+            commands::time_entries,
+            commands::pomodoro_set,
+            commands::pomodoro_start,
+            commands::pomodoro_stop,
             commands::quit_app,
             commands::backup_export,
             commands::backup_import,

@@ -19,6 +19,9 @@ pub const HABIT_INSERT: &str =
 pub const HABIT_LOG_COLS: &str = "id, habit_id, date, value";
 pub const HABIT_LOG_INSERT: &str =
     "INSERT INTO habit_logs (id, habit_id, date, value) VALUES (?1,?2,?3,?4)";
+pub const TIME_ENTRY_COLS: &str = "id, task_id, started_at, ended_at";
+pub const TIME_ENTRY_INSERT: &str =
+    "INSERT INTO time_entries (id, task_id, started_at, ended_at) VALUES (?1,?2,?3,?4)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -173,6 +176,25 @@ pub struct HabitLog {
     pub value: i64,
 }
 
+/// 计时段：ended_at 为 NULL 表示进行中（全库至多一条）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TimeEntry {
+    pub id: String,
+    pub task_id: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+}
+
+/// 计时状态（托盘与前端共用）：进行中条目 + 任务标题 + 已计秒数。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunningTimer {
+    pub entry: TimeEntry,
+    pub task_title: String,
+    pub elapsed_sec: i64,
+}
+
 pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
@@ -304,6 +326,40 @@ pub fn query_logs_between(c: &Connection, from: &str, to: &str) -> rusqlite::Res
     rows.collect()
 }
 
+pub fn time_entry_from_row(r: &Row) -> rusqlite::Result<TimeEntry> {
+    Ok(TimeEntry {
+        id: r.get(0)?,
+        task_id: r.get(1)?,
+        started_at: r.get(2)?,
+        ended_at: r.get(3)?,
+    })
+}
+
+/// 当前进行中的计时（全库至多一条；ended_at IS NULL）。
+pub fn query_running_entry(c: &Connection) -> rusqlite::Result<Option<TimeEntry>> {
+    let mut stmt = c.prepare(&format!(
+        "SELECT {TIME_ENTRY_COLS} FROM time_entries WHERE ended_at IS NULL ORDER BY started_at LIMIT 1"
+    ))?;
+    let mut rows = stmt.query_map([], time_entry_from_row)?;
+    match rows.next() {
+        Some(row) => Ok(Some(row?)),
+        None => Ok(None),
+    }
+}
+
+/// 区间计时条目（按开始时间升序）。
+pub fn query_entries_between(
+    c: &Connection,
+    from: &str,
+    to: &str,
+) -> rusqlite::Result<Vec<TimeEntry>> {
+    let mut stmt = c.prepare(&format!(
+        "SELECT {TIME_ENTRY_COLS} FROM time_entries WHERE started_at >= ?1 AND started_at < ?2 ORDER BY started_at"
+    ))?;
+    let rows = stmt.query_map(params![from, to], time_entry_from_row)?;
+    rows.collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -378,6 +434,29 @@ mod tests {
         let got = query_logs_between(&c, "2026-09-01", "2026-09-04").unwrap();
         let ids: Vec<&str> = got.iter().map(|l| l.id.as_str()).collect();
         assert_eq!(ids, vec!["l1", "l3"], "区间内按 habit_id, date 排序");
+    }
+
+    #[test]
+    fn time_entry_roundtrip_and_running_query() {
+        let c = mem();
+        c.execute(TIME_ENTRY_INSERT, params!["e1", "t1", "2026-09-10T09:00:00", Some("2026-09-10T09:25:00")]).unwrap();
+        c.execute(TIME_ENTRY_INSERT, params!["e2", "t1", "2026-09-10T10:00:00", None::<String>]).unwrap();
+
+        let running = query_running_entry(&c).unwrap();
+        assert_eq!(running.as_ref().map(|e| e.id.as_str()), Some("e2"), "ended_at NULL 的唯一进行中条目");
+
+        let range = query_entries_between(&c, "2026-09-10T00:00:00", "2026-09-11T00:00:00").unwrap();
+        let ids: Vec<&str> = range.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, vec!["e1", "e2"]);
+        let empty = query_entries_between(&c, "2026-09-11T00:00:00", "2026-09-12T00:00:00").unwrap();
+        assert!(empty.is_empty());
+    }
+
+    #[test]
+    fn running_entry_none_when_all_stopped() {
+        let c = mem();
+        c.execute(TIME_ENTRY_INSERT, params!["e1", "t1", "2026-09-10T09:00:00", Some("2026-09-10T09:25:00")]).unwrap();
+        assert!(query_running_entry(&c).unwrap().is_none());
     }
 
     #[test]

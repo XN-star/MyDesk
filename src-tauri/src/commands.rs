@@ -2,7 +2,7 @@ use crate::models::*;
 use crate::Db;
 use rusqlite::{params, Connection};
 use std::collections::HashMap;
-use tauri::State;
+use tauri::{Manager, State};
 use uuid::Uuid;
 
 type DbState<'a> = State<'a, Db>;
@@ -392,6 +392,129 @@ pub fn habit_toggle(db: DbState, id: String, date: String) -> Result<Option<Habi
 #[tauri::command]
 pub fn habit_logs(db: DbState, from: String, to: String) -> Result<Vec<HabitLog>, String> {
     with_conn(db, move |c| query_logs_between(c, &from, &to))
+}
+
+/// 开始计时：已存在进行中条目则先自动停止（同一时间只允许一个计时）。
+#[tauri::command]
+pub fn timer_start(db: DbState, task_id: String) -> Result<TimeEntry, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        let exists: i64 = c.query_row(
+            "SELECT COUNT(*) FROM tasks WHERE id=?1",
+            params![task_id],
+            |r| r.get(0),
+        )?;
+        if exists == 0 {
+            return Err(rusqlite::Error::InvalidParameterName("任务不存在".into()));
+        }
+        c.execute(
+            "UPDATE time_entries SET ended_at=?1 WHERE ended_at IS NULL",
+            params![now],
+        )?;
+        let entry = TimeEntry {
+            id: Uuid::new_v4().to_string(),
+            task_id,
+            started_at: now,
+            ended_at: None,
+        };
+        c.execute(
+            TIME_ENTRY_INSERT,
+            params![entry.id, entry.task_id, entry.started_at, entry.ended_at],
+        )?;
+        Ok(entry)
+    })
+}
+
+/// 停止当前计时；无进行中返回 None。
+#[tauri::command]
+pub fn timer_stop(db: DbState) -> Result<Option<TimeEntry>, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        let running = query_running_entry(c)?;
+        match running {
+            Some(e) => {
+                c.execute(
+                    "UPDATE time_entries SET ended_at=?2 WHERE id=?1",
+                    params![e.id, now],
+                )?;
+                Ok(Some(TimeEntry { ended_at: Some(now), ..e }))
+            }
+            None => Ok(None),
+        }
+    })
+}
+
+/// 当前计时状态（含任务标题与已计秒数）；空闲返回 None。
+#[tauri::command]
+pub fn timer_status(db: DbState) -> Result<Option<RunningTimer>, String> {
+    with_conn(db, |c| {
+        let running = query_running_entry(c)?;
+        match running {
+            Some(entry) => {
+                let title: String = c
+                    .query_row(
+                        "SELECT title FROM tasks WHERE id=?1",
+                        params![entry.task_id],
+                        |r| r.get(0),
+                    )
+                    .unwrap_or_default();
+                let elapsed = crate::reminders::parse_naive(&entry.started_at)
+                    .map(|t| (chrono::Local::now().naive_local() - t).num_seconds().max(0))
+                    .unwrap_or(0);
+                Ok(Some(RunningTimer { entry, task_title: title, elapsed_sec: elapsed }))
+            }
+            None => Ok(None),
+        }
+    })
+}
+
+#[tauri::command]
+pub fn time_entries(db: DbState, from: String, to: String) -> Result<Vec<TimeEntry>, String> {
+    with_conn(db, move |c| query_entries_between(c, &from, &to))
+}
+
+/// 番茄钟档位（分钟），存 settings。
+#[tauri::command]
+pub fn pomodoro_set(db: DbState, focus_min: i64, break_min: i64) -> Result<(), String> {
+    with_conn(db, move |c| {
+        for (k, v) in [("pomodoroFocus", focus_min), ("pomodoroBreak", break_min)] {
+            c.execute(
+                "INSERT INTO settings (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value=?2",
+                params![k, v.to_string()],
+            )?;
+        }
+        Ok(())
+    })
+}
+
+/// 开启番茄（可绑定当前计时任务；无任务时仅跑钟）。从 settings 读档位（默认 25/5）。
+#[tauri::command]
+pub fn pomodoro_start(app: tauri::AppHandle, task_id: Option<String>) -> Result<(), String> {
+    let focus_min: i64 = settings_get(&app, "pomodoroFocus").unwrap_or(25);
+    let break_min: i64 = settings_get(&app, "pomodoroBreak").unwrap_or(5);
+    let state: tauri::State<crate::timer::TimerState> = app.state();
+    *state.task_id.lock().map_err(|e| e.to_string())? = task_id;
+    *state.pomodoro.lock().map_err(|e| e.to_string())? =
+        Some(crate::timer::Pomodoro::new(focus_min, break_min));
+    state.active.store(true, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn pomodoro_stop(app: tauri::AppHandle) -> Result<(), String> {
+    let state: tauri::State<crate::timer::TimerState> = app.state();
+    state.active.store(false, std::sync::atomic::Ordering::Relaxed);
+    *state.pomodoro.lock().map_err(|e| e.to_string())? = None;
+    Ok(())
+}
+
+fn settings_get(app: &tauri::AppHandle, key: &str) -> Option<i64> {
+    let db: tauri::State<Db> = app.state();
+    let conn = db.0.lock().ok()?;
+    let v: String = conn
+        .query_row("SELECT value FROM settings WHERE key=?1", params![key], |r| r.get(0))
+        .ok()?;
+    v.parse().ok()
 }
 
 #[tauri::command]
