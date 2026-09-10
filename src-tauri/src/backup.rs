@@ -4,13 +4,15 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-pub const VERSION: i64 = 6;
+pub const VERSION: i64 = 7;
 
 pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let tasks = query_all_tasks(conn)?;
     let notes = query_all_notes(conn)?;
     let links = query_all_links(conn)?;
     let boards = query_all_boards(conn)?;
+    let habits = query_all_habits(conn)?;
+    let habit_logs = query_logs_between(conn, "0000-01-01", "9999-12-31")?;
     let settings = query_all_settings(conn)?;
     let doc = json!({
         "version": VERSION,
@@ -19,6 +21,8 @@ pub fn export(conn: &Connection, path: &Path) -> Result<()> {
         "notes": notes,
         "links": links,
         "boards": boards,
+        "habits": habits,
+        "habitLogs": habit_logs,
         "settings": settings,
     });
     std::fs::write(path, serde_json::to_vec_pretty(&doc)?)?;
@@ -63,6 +67,15 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     // v1–v5 备份没有 boards 字段，视为空（导入后补种子 default）。
     let boards: Vec<Board> = match doc.get("boards") {
         Some(v) => serde_json::from_value(v.clone()).context("boards 字段格式错误")?,
+        None => Vec::new(),
+    };
+    // v1–v6 备份没有 habits/habitLogs 字段，视为空（整库替换语义）。
+    let habits: Vec<Habit> = match doc.get("habits") {
+        Some(v) => serde_json::from_value(v.clone()).context("habits 字段格式错误")?,
+        None => Vec::new(),
+    };
+    let habit_logs: Vec<HabitLog> = match doc.get("habitLogs") {
+        Some(v) => serde_json::from_value(v.clone()).context("habitLogs 字段格式错误")?,
         None => Vec::new(),
     };
 
@@ -129,6 +142,8 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     tx.execute("DELETE FROM notes", [])?;
     tx.execute("DELETE FROM links", [])?;
     tx.execute("DELETE FROM boards", [])?;
+    tx.execute("DELETE FROM habits", [])?;
+    tx.execute("DELETE FROM habit_logs", [])?;
     tx.execute("DELETE FROM settings", [])?;
     for t in tasks.iter().chain(converted.iter()) {
         tx.execute(
@@ -165,6 +180,18 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     for b in &boards {
         tx.execute(BOARD_INSERT, params![b.id, b.name, b.created_at, b.updated_at])?;
     }
+    for h in &habits {
+        tx.execute(
+            HABIT_INSERT,
+            params![h.id, h.name, h.frequency, h.reminder, h.archived, h.created_at, h.updated_at],
+        )?;
+    }
+    for l in &habit_logs {
+        tx.execute(
+            HABIT_LOG_INSERT,
+            params![l.id, l.habit_id, l.date, l.value],
+        )?;
+    }
     // 任何备份导入后保证 default 看板存在
     tx.execute(
         "INSERT OR IGNORE INTO boards (id, name, created_at, updated_at) VALUES ('default', '默认看板', '2026-09-09T00:00:00', '2026-09-09T00:00:00')",
@@ -174,7 +201,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
         tx.execute(SETTING_INSERT, params![s.key, s.value])?;
     }
     tx.commit()?;
-    Ok(tasks.len() + converted.len() + notes.len() + links.len())
+    Ok(tasks.len() + converted.len() + notes.len() + links.len() + habits.len() + habit_logs.len())
 }
 
 #[cfg(test)]
@@ -209,7 +236,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 6);
+        assert_eq!(doc["version"], 7);
         std::fs::remove_file(&file).ok();
     }
 
@@ -233,7 +260,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 6);
+        assert_eq!(doc["version"], 7);
         std::fs::remove_file(&file).ok();
     }
 
@@ -285,7 +312,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 6);
+        assert_eq!(doc["version"], 7);
         std::fs::remove_file(&file).ok();
     }
 
@@ -337,7 +364,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 6);
+        assert_eq!(doc["version"], 7);
         std::fs::remove_file(&file).ok();
     }
 
@@ -431,6 +458,82 @@ mod tests {
         std::fs::write(&file, "{oops").unwrap();
         let mut c = mem();
         assert!(import(&mut c, &file).is_err());
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_preserves_habits() {
+        let src = mem();
+        src.execute(
+            crate::models::HABIT_INSERT,
+            params!["h1", "健身", "weekly", Some("08:00"), 0, "2026-09-09T10:00:00", "2026-09-09T10:00:00"],
+        )
+        .unwrap();
+        src.execute(
+            crate::models::HABIT_LOG_INSERT,
+            params!["l1", "h1", "2026-09-09", 1],
+        )
+        .unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-habits-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+
+        let mut dst = mem();
+        let n = import(&mut dst, &file).unwrap();
+        assert_eq!(n, 2, "1 习惯 + 1 日志");
+        let habits = crate::models::query_all_habits(&dst).unwrap();
+        assert_eq!(habits.len(), 1);
+        assert_eq!(habits[0].name, "健身");
+        assert_eq!(habits[0].frequency, "weekly");
+        assert_eq!(habits[0].reminder.as_deref(), Some("08:00"));
+        let logs = crate::models::query_logs_between(&dst, "0000-01-01", "9999-12-31").unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].habit_id, "h1");
+        assert_eq!(logs[0].value, 1);
+
+        let text = std::fs::read_to_string(&file).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["version"], 7);
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn import_v6_backup_without_habits_is_accepted() {
+        let file = std::env::temp_dir().join(format!("ws-bk-v6noh-{}.json", std::process::id()));
+        std::fs::write(
+            &file,
+            r#"{
+              "version": 6,
+              "tasks": [],
+              "notes": [],
+              "links": [],
+              "boards": [],
+              "settings": []
+            }"#,
+        )
+        .unwrap();
+
+        let mut c = mem();
+        c.execute(crate::models::HABIT_INSERT, params!["h-old", "将被清空", "daily", None::<String>, 0, "2026-09-09T10:00:00", "2026-09-09T10:00:00"]).unwrap();
+        let n = import(&mut c, &file).unwrap();
+        assert_eq!(n, 0);
+        assert_eq!(
+            crate::models::query_all_habits(&c).unwrap().len(),
+            0,
+            "旧备份无 habits，整库替换后为空"
+        );
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_preserves_task_repeat() {
+        let src = mem();
+        src.execute(TASK_INSERT, params!["t9", "default", "每天喝水", "", "todo", 1, "2026-09-09T09:00:00", 100.0, None::<String>, Some(0), Some("daily"), "2026-09-08T09:00:00", "2026-09-08T09:00:00"]).unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-repeat-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+        let mut dst = mem();
+        import(&mut dst, &file).unwrap();
+        let t = query_all_tasks(&dst).unwrap();
+        assert_eq!(t[0].repeat.as_deref(), Some("daily"));
         std::fs::remove_file(&file).ok();
     }
 }
