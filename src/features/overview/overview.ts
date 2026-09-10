@@ -1,5 +1,6 @@
-import type { Link, Note, Task } from '../../types';
+import type { Habit, HabitLog, Link, Note, Task } from '../../types';
 import { fromDate, toDateStr } from '../../lib/format';
+import { dailyChecked } from '../habits/habits';
 
 export interface TaskStats {
   todoToday: number;
@@ -109,4 +110,17 @@ export function weekReport(tasks: Task[], now: Date): WeekReport {
     }
   }
   return { done, created, overdue, donePrev, createdPrev, overduePrev, weekStart };
+}
+
+export interface TodayHabits {
+  total: number;
+  checked: number;
+  /** 今日未打卡的习惯，保持注册顺序 */
+  pending: Habit[];
+}
+
+/** 今日习惯统计：已打卡/总数与待打卡列表。 */
+export function todayHabits(habits: Habit[], logs: HabitLog[], date: string): TodayHabits {
+  const pending = habits.filter((h) => !dailyChecked(logs, h.id, date));
+  return { total: habits.length, checked: habits.length - pending.length, pending };
 }

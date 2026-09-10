@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
-import { dueLabel, timeShort } from '../../lib/format';
+import { dueLabel, timeShort, toDateStr } from '../../lib/format';
+import { useHabitsStore } from '../../stores/habits';
 import { useLinksStore } from '../../stores/links';
 import { useNotesStore } from '../../stores/notes';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
 import { kindIcon } from '../links/links';
-import { frequentLinks, recentNotes, taskStats, upcomingTasks, weekReport } from './overview';
+import { frequentLinks, recentNotes, taskStats, todayHabits, upcomingTasks, weekReport } from './overview';
 
 export default function OverviewPage() {
   const tasks = useTaskStore((s) => s.tasks);
@@ -15,19 +16,25 @@ export default function OverviewPage() {
   const links = useLinksStore((s) => s.links);
   const loadLinks = useLinksStore((s) => s.load);
   const openLink = useLinksStore((s) => s.open);
+  const habits = useHabitsStore((s) => s.habits);
+  const habitLogs = useHabitsStore((s) => s.logs);
+  const loadHabits = useHabitsStore((s) => s.load);
   const setPage = useUiStore((s) => s.setPage);
 
   useEffect(() => {
     void loadTasks();
     void loadNotes();
     void loadLinks();
-  }, [loadTasks, loadNotes, loadLinks]);
+    void loadHabits();
+  }, [loadTasks, loadNotes, loadLinks, loadHabits]);
 
   const stats = taskStats(tasks, new Date());
   const upcoming = upcomingTasks(tasks, new Date());
   const notes5 = recentNotes(notes);
   const links6 = frequentLinks(links);
   const week = weekReport(tasks, new Date());
+  const today = toDateStr(new Date());
+  const habitsToday = todayHabits(habits, habitLogs, today);
   const delta = (cur: number, prev: number) => {
     const d = cur - prev;
     if (d === 0) return <span className="ov-delta">持平</span>;
@@ -101,6 +108,32 @@ export default function OverviewPage() {
               <b>{week.overdue}</b> 逾期 {delta(week.overdue, week.overduePrev)}
             </span>
           </div>
+        </button>
+        <button className="panel overview-card" onClick={() => setPage('habits')}>
+          <h3>◉ 今日习惯</h3>
+          {habits.length === 0 ? (
+            <p className="muted">还没有习惯</p>
+          ) : (
+            <>
+              <div className="overview-stats">
+                <span>
+                  <b>
+                    {habitsToday.checked}/{habitsToday.total}
+                  </b>{' '}
+                  已打卡
+                </span>
+              </div>
+              {habitsToday.pending.length > 0 && (
+                <ul className="overview-list">
+                  {habitsToday.pending.slice(0, 3).map((h) => (
+                    <li key={h.id}>
+                      <span className="ov-title">{h.name}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
         </button>
       </div>
       <div className="panel overview-card overview-links">

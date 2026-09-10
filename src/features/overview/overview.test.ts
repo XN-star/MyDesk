@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Link, Note, Task } from '../../types';
-import { frequentLinks, recentNotes, taskStats, upcomingTasks, weekReport } from './overview';
+import { frequentLinks, recentNotes, taskStats, upcomingTasks, weekReport, todayHabits } from './overview';
 
 const NOW = new Date('2026-09-09T10:00:00');
 
@@ -128,5 +128,36 @@ describe('weekReport', () => {
     expect(r.weekStart).toBe('2026-09-07');
     const t = weekReport([task({ id: 'x', createdAt: '2026-08-31T10:00:00' })], monday);
     expect(t.createdPrev).toBe(1);
+  });
+});
+
+describe('todayHabits', () => {
+  function habit(id: string, name: string) {
+    return {
+      id,
+      name,
+      frequency: 'daily' as const,
+      reminder: null,
+      archived: false,
+      createdAt: '2026-09-01T09:00:00',
+      updatedAt: '2026-09-01T09:00:00',
+    };
+  }
+
+  it('统计已打卡数并列出未打卡习惯', () => {
+    const habits = [habit('a', '晨读'), habit('b', '健身'), habit('c', '喝水')];
+    const logs = [{ id: 'l1', habitId: 'a', date: '2026-09-09', value: 1 }];
+    const r = todayHabits(habits, logs, '2026-09-09');
+    expect(r.total).toBe(3);
+    expect(r.checked).toBe(1);
+    expect(r.pending.map((h) => h.id)).toEqual(['b', 'c']);
+  });
+
+  it('全部打卡完成时 pending 为空', () => {
+    const habits = [habit('a', '晨读')];
+    const logs = [{ id: 'l1', habitId: 'a', date: '2026-09-09', value: 1 }];
+    const r = todayHabits(habits, logs, '2026-09-09');
+    expect(r.checked).toBe(1);
+    expect(r.pending).toHaveLength(0);
   });
 });
