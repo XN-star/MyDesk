@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Note } from '../../types';
-import { dailyNoteTitle, findDailyNote, noteExcerpt, searchNotes, sortNotes, splitPinned } from './notes';
+import {
+  dailyNoteTitle,
+  findDailyNote,
+  noteExcerpt,
+  parseLinks,
+  searchNotes,
+  sortNotes,
+  splitPinned,
+} from './notes';
 
 function note(partial: Partial<Note>): Note {
   return {
@@ -93,5 +101,27 @@ describe('findDailyNote', () => {
   it('命中第一条（依赖后端排序输入）', () => {
     const notes = [note({ id: 'first', title: '9月10日' }), note({ id: 'second', title: '9月10日' })];
     expect(findDailyNote(notes, '2026-09-10')?.id).toBe('first');
+  });
+});
+
+describe('parseLinks', () => {
+  it('提取正文中的 [[标题]] 引用并去重保序', () => {
+    expect(parseLinks('见 [[周会纪要]] 与 [[项目规划]]，再看 [[周会纪要]]')).toEqual([
+      '周会纪要',
+      '项目规划',
+    ]);
+  });
+
+  it('空标题的 [[]] 不算链接', () => {
+    expect(parseLinks('空 [[]] 引用')).toEqual([]);
+  });
+
+  it('未闭合的 [[ 不算链接', () => {
+    expect(parseLinks('未闭合 [[标题')).toEqual([]);
+  });
+
+  it('无链接返回空数组', () => {
+    expect(parseLinks('普通文本')).toEqual([]);
+    expect(parseLinks('')).toEqual([]);
   });
 });

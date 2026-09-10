@@ -40,3 +40,13 @@ export function findDailyNote(notes: Note[], date: string): Note | null {
   const title = dailyNoteTitle(date);
   return notes.find((n) => n.title === title) ?? null;
 }
+
+/** 提取正文中的 [[标题]] 双向链接引用，去重并保持首次出现顺序；空标题/未闭合不算。 */
+export function parseLinks(content: string): string[] {
+  const links: string[] = [];
+  for (const m of content.matchAll(/\[\[([^\[\]]+)\]\]/g)) {
+    const title = m[1].trim();
+    if (title && !links.includes(title)) links.push(title);
+  }
+  return links;
+}
