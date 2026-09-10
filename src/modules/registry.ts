@@ -1,6 +1,7 @@
 import { MODULE_META } from './meta';
 import type { ComponentType } from 'react';
 import KanbanPage from '../features/tasks/KanbanPage';
+import FocusPage from '../features/focus/FocusPage';
 import CalendarPage from '../features/calendar/CalendarPage';
 import NotesPage from '../features/notes/NotesPage';
 import LinksPage from '../features/links/LinksPage';
@@ -21,6 +22,7 @@ export interface Module {
 const ROUTES: Record<string, string> = {
   overview: '/overview',
   tasks: '/tasks',
+  focus: '/focus',
   calendar: '/calendar',
   habits: '/habits',
   notes: '/notes',
@@ -30,6 +32,7 @@ const ROUTES: Record<string, string> = {
 const COMPONENTS: Record<string, ComponentType> = {
   overview: OverviewPage,
   tasks: KanbanPage,
+  focus: FocusPage,
   calendar: CalendarPage,
   habits: HabitsPage,
   notes: NotesPage,

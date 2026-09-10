@@ -154,7 +154,7 @@ export default function OverviewPage() {
             </>
           )}
         </button>
-        <button className="panel overview-card" onClick={() => setPage('tasks')}>
+        <button className="panel overview-card" onClick={() => setPage('focus')}>
           <h3>⏱ 今日专注</h3>
           {focus.totalMin === 0 ? (
             <p className="muted">今天还没有专注记录</p>

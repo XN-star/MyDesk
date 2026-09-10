@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { api } from '../../lib/api';
@@ -14,95 +14,21 @@ export interface WidgetData {
 /**
  * 桌面常驻小组件：今日任务 / 下一次提醒 / 最近笔记。
  * 30s 轮询刷新；点击条目唤起主窗并跳转。
+ * 纯 React 声明式渲染——React 管理的 root 里不能手动 append DOM（会被清空导致白板）。
  */
 export default function WidgetWindow() {
+  const [data, setData] = useState<WidgetData | null>(null);
+
   useEffect(() => {
     let alive = true;
-
     async function refresh() {
       try {
-        const data = await api.widgetData();
-        if (!alive) return;
-        render(data);
+        const d = await api.widgetData();
+        if (alive) setData(d);
       } catch {
-        // 后端不可达时保持原内容
+        // 后端不可达时保留上次数据
       }
     }
-
-    function render(data: WidgetData) {
-      const root = document.getElementById('root');
-      if (!root) return;
-      root.innerHTML = '';
-      const el = document.createElement('div');
-      el.className = 'widget';
-
-      const head = document.createElement('div');
-      head.className = 'widget-head';
-      head.textContent = 'MyDesk';
-      el.appendChild(head);
-
-      const section = (title: string) => {
-        const s = document.createElement('div');
-        s.className = 'widget-section';
-        const t = document.createElement('div');
-        t.className = 'widget-section-title';
-        t.textContent = title;
-        s.appendChild(t);
-        return s;
-      };
-
-      const tasks = section('今日任务');
-      if (data.todayTasks.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'widget-empty';
-        empty.textContent = '没有待办';
-        tasks.appendChild(empty);
-      }
-      for (const t of data.todayTasks) {
-        const row = document.createElement('button');
-        row.className = 'widget-row';
-        row.textContent = t.title;
-        row.title = '打开任务';
-        row.onclick = () => void openMain('task', t.id);
-        tasks.appendChild(row);
-      }
-      el.appendChild(tasks);
-
-      if (data.nextReminder) {
-        const r = section('下一次提醒');
-        const row = document.createElement('button');
-        row.className = 'widget-row';
-        row.textContent = `${data.nextReminder.title} · ${dueLabel(data.nextReminder.dueAt!, new Date())}`;
-        row.onclick = () => void openMain('task', data.nextReminder!.id);
-        r.appendChild(row);
-        el.appendChild(r);
-      }
-
-      const notes = section('最近笔记');
-      if (data.recentNotes.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'widget-empty';
-        empty.textContent = '还没有笔记';
-        notes.appendChild(empty);
-      }
-      for (const n of data.recentNotes) {
-        const row = document.createElement('button');
-        row.className = 'widget-row';
-        row.textContent = n.title || '无标题';
-        row.onclick = () => void openMain('note', n.id);
-        notes.appendChild(row);
-      }
-      el.appendChild(notes);
-
-      root.appendChild(el);
-    }
-
-    async function openMain(type: 'task' | 'note', id: string) {
-      const w = getCurrentWindow();
-      await emit('quick://open', { type, id });
-      await w.hide();
-    }
-
     void refresh();
     const timer = setInterval(() => void refresh(), 30_000);
     return () => {
@@ -111,5 +37,47 @@ export default function WidgetWindow() {
     };
   }, []);
 
-  return null;
+  async function openMain(type: 'task' | 'note', id: string) {
+    const w = getCurrentWindow();
+    await emit('quick://open', { type, id });
+    await w.hide();
+  }
+
+  return (
+    <div className="widget">
+      <div className="widget-head">MyDesk</div>
+
+      <div className="widget-section">
+        <div className="widget-section-title">今日任务</div>
+        {(data?.todayTasks.length ?? 0) === 0 && <div className="widget-empty">没有待办</div>}
+        {data?.todayTasks.map((t) => (
+          <button key={t.id} className="widget-row" title="打开任务" onClick={() => void openMain('task', t.id)}>
+            {t.title}
+          </button>
+        ))}
+      </div>
+
+      {data?.nextReminder && (
+        <div className="widget-section">
+          <div className="widget-section-title">下一次提醒</div>
+          <button
+            className="widget-row"
+            onClick={() => void openMain('task', data.nextReminder!.id)}
+          >
+            {data.nextReminder.title} · {dueLabel(data.nextReminder.dueAt!, new Date())}
+          </button>
+        </div>
+      )}
+
+      <div className="widget-section">
+        <div className="widget-section-title">最近笔记</div>
+        {(data?.recentNotes.length ?? 0) === 0 && <div className="widget-empty">还没有笔记</div>}
+        {data?.recentNotes.map((n) => (
+          <button key={n.id} className="widget-row" onClick={() => void openMain('note', n.id)}>
+            {n.title || '无标题'}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }

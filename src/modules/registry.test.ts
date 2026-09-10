@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { enabledModules, MODULES } from './registry';
 
 describe('registry', () => {
-  it('包含概览、任务看板、日历、习惯、笔记、快捷入口六个内置模块', () => {
+  it('包含概览、任务看板、专注、日历、习惯、笔记、快捷入口七个内置模块', () => {
     expect(MODULES.map((m) => m.id).sort()).toEqual([
       'calendar',
+      'focus',
       'habits',
       'links',
       'notes',

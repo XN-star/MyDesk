@@ -23,6 +23,13 @@ export const MODULE_META: ModuleMeta[] = [
     defaultEnabled: true,
   },
   {
+    id: 'focus',
+    name: '专注',
+    icon: '⏱',
+    description: '任务计时与番茄钟',
+    defaultEnabled: true,
+  },
+  {
     id: 'calendar',
     name: '日历',
     icon: '▤',
