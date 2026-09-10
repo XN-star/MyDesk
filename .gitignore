@@ -1,14 +1,11 @@
 node_modules/
 target/
 dist/
-release-*.exe
+*.exe
 *.db
 .DS_Store
 
-# Tauri
-src-tauri/target
-src-tauri/gen/schemas
-
-# 扫描工具状态（不入库）
+# 本地工具状态（不入库）
+.zcode/
 .mimosa/
 .playwright-mcp/

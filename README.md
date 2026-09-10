@@ -1,6 +1,12 @@
-# 个人工作台（Personal Workstation）
+# MyDesk（个人工作台）
 
 Windows 桌面个人工作台：概览 + 任务看板 + 日历日程 + 笔记 + 快捷入口，模块化架构，数据全本地。
+
+![版本](https://img.shields.io/badge/version-1.0.1-blue) ![许可证](https://img.shields.io/badge/license-MIT-green) ![平台](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey)
+
+## 下载安装
+
+从 [Releases](../../releases) 页面下载最新版 `MyDesk-v<版本>-setup.exe`，双击安装即可。无需其他运行时依赖。
 
 ## 功能
 
@@ -43,3 +49,22 @@ Tauri 2 · React 19 · TypeScript · Zustand · dnd-kit · date-fns · solarluna
 
 - 到期提醒为 30 秒轮询（到期 1 分钟窗口内触发），重启后不补发错过的旧任务提醒。
 - 系统通知若被 Windows 关闭，任务仍会在看板中标红显示。
+
+## 从源码构建
+
+需要 Node.js 18+、Rust 1.75+（MSVC 工具链）、WebView2（Win10/11 一般已内置）。
+
+```bash
+git clone https://github.com/XN-star/MyDesk.git
+cd MyDesk
+npm install
+npm run dist   # 产出 MyDesk-v<版本>-setup.exe
+```
+
+## 参与
+
+欢迎 Issue 与 PR：报错请附上复现步骤与日志；功能建议先开 Issue 讨论。
+
+## 许可证
+
+[MIT](LICENSE) © 2026 XN-star
