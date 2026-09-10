@@ -52,7 +52,12 @@ export default function QuickWindow() {
     const parsed = parseQuickTask(q);
     if (!parsed.title) return;
     try {
-      await api.taskCreate({ title: parsed.title, dueAt: parsed.dueAt });
+      await api.taskCreate({
+        title: parsed.title,
+        description: parsed.description,
+        dueAt: parsed.dueAt,
+        remindMinutesBefore: parsed.remindMinutesBefore,
+      });
       await emit('quick://changed');
       setNotice(`已创建：${parsed.title}`);
       setTimeout(() => void hide(), 900);
@@ -81,7 +86,7 @@ export default function QuickWindow() {
       <input
         className="quick-input"
         autoFocus
-        placeholder="搜索或输入任务（支持：明天 15:00 / 周五 / 14:30）"
+        placeholder="搜索或输入任务（明天 15:00 / 每天 9:00 / #标签）"
         value={q}
         onChange={(e) => {
           setQ(e.target.value);
