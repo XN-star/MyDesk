@@ -12,6 +12,8 @@ export interface Task {
   doneAt: string | null;
   /** 提前提醒分钟数：null=不提醒，0=准点，n=提前 n 分钟 */
   remindMinutesBefore: number | null;
+  /** 重复规则：null=一次性；'daily'|'weekly'|'monthly'=完成时顺延生成下一单 */
+  repeat: 'daily' | 'weekly' | 'monthly' | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -24,6 +26,7 @@ export interface TaskInput {
   status?: TaskStatus;
   remindMinutesBefore?: number | null;
   boardId?: string;
+  repeat?: 'daily' | 'weekly' | 'monthly' | null;
 }
 
 export interface Note {
@@ -67,4 +70,30 @@ export interface Board {
 
 export interface BoardInput {
   name: string;
+}
+
+export type HabitFrequency = 'daily' | 'weekly' | 'monthly';
+
+export interface Habit {
+  id: string;
+  name: string;
+  frequency: HabitFrequency;
+  /** 每日提醒时刻 'HH:MM'；null=不提醒 */
+  reminder: string | null;
+  archived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HabitInput {
+  name: string;
+  frequency?: HabitFrequency;
+  reminder?: string | null;
+}
+
+export interface HabitLog {
+  id: string;
+  habitId: string;
+  date: string;
+  value: number; // 1=完成 0=未完成 2=跳过
 }

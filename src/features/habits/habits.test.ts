@@ -1,0 +1,135 @@
+import { describe, expect, it } from 'vitest';
+import type { Habit, HabitLog } from '../../types';
+import {
+  bestStreak,
+  currentScore,
+  dailyChecked,
+  frequencyFactor,
+  habitScore,
+  heatmapData,
+  multiplier,
+  streak,
+} from './habits';
+
+function habit(p: Partial<Habit>): Habit {
+  return {
+    id: 'h1',
+    name: '健身',
+    frequency: 'daily',
+    reminder: null,
+    archived: false,
+    createdAt: '2026-09-01T09:00:00',
+    updatedAt: '2026-09-01T09:00:00',
+    ...p,
+  };
+}
+
+function log(habitId: string, date: string, value = 1): HabitLog {
+  return { id: `${habitId}-${date}`, habitId, date, value };
+}
+
+describe('multiplier / habitScore（uhabits EWMA）', () => {
+  it('每日习惯 multiplier = 0.5^(1/13)', () => {
+    expect(multiplier(1)).toBeCloseTo(Math.pow(0.5, 1 / 13), 12);
+  });
+
+  it('每日习惯首日打卡得分 ≈ 0.051922（官方测试期望值）', () => {
+    const s = habitScore(0, 1, 1);
+    expect(s).toBeCloseTo(1 - Math.pow(0.5, 1 / 13), 5);
+    expect(s).toBeGreaterThan(0.0519);
+    expect(s).toBeLessThan(0.0520);
+  });
+
+  it('连续不打卡按半衰期 13 天衰减', () => {
+    let s = 0.99;
+    for (let i = 0; i < 13; i++) s = habitScore(s, 1, 0);
+    expect(s).toBeCloseTo(0.495, 2);
+  });
+
+  it('weekly 习惯 f 加倍平滑（官方 numerator/denominator ×2）', () => {
+    expect(frequencyFactor('weekly')).toBeCloseTo(2 / 7, 12);
+    expect(frequencyFactor('monthly')).toBeCloseTo(2 / 30, 12);
+    expect(frequencyFactor('daily')).toBe(1);
+  });
+
+  it('分数封顶 1', () => {
+    let s = 0;
+    for (let i = 0; i < 200; i++) s = habitScore(s, 1, 1);
+    expect(s).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('streak', () => {
+  const h = 'h1';
+
+  it('连续打卡计数', () => {
+    const logs = [log(h, '2026-09-05'), log(h, '2026-09-06'), log(h, '2026-09-07')];
+    expect(streak(logs, '2026-09-07')).toBe(3);
+  });
+
+  it('今天未打卡不打断（从昨天起算）', () => {
+    const logs = [log(h, '2026-09-05'), log(h, '2026-09-06')];
+    expect(streak(logs, '2026-09-07')).toBe(2);
+  });
+
+  it('中间断档归零', () => {
+    const logs = [log(h, '2026-09-05'), log(h, '2026-09-07')];
+    expect(streak(logs, '2026-09-07')).toBe(1);
+  });
+
+  it('SKIP（value=2）不打断连续', () => {
+    const logs = [log(h, '2026-09-05'), log(h, '2026-09-06', 2), log(h, '2026-09-07')];
+    expect(streak(logs, '2026-09-07')).toBe(3);
+  });
+});
+
+describe('bestStreak', () => {
+  it('取历史最长一段', () => {
+    const logs = [
+      log('h1', '2026-09-01'),
+      log('h1', '2026-09-02'),
+      log('h1', '2026-09-03'),
+      log('h1', '2026-09-06'),
+      log('h1', '2026-09-07'),
+    ];
+    expect(bestStreak(logs)).toBe(3);
+  });
+});
+
+describe('currentScore', () => {
+  it('从习惯创建日迭代到今天', () => {
+    const h = habit({ createdAt: '2026-09-01T09:00:00' });
+    const logs = [log('h1', '2026-09-02'), log('h1', '2026-09-03')];
+    // 手工按 EWMA 迭代验证
+    let s = 0;
+    for (let d = 1; d <= 7; d++) {
+      const date = `2026-09-0${d}`;
+      const done = logs.some((l) => l.date === date && l.value === 1);
+      s = habitScore(s, 1, done ? 1 : 0);
+    }
+    expect(currentScore(h, logs, '2026-09-07')).toBeCloseTo(s, 12);
+  });
+});
+
+describe('heatmapData', () => {
+  it('产出 52 周且对齐到周六结尾的网格（GitHub contributions 式）', () => {
+    const cells = heatmapData([], 52, '2026-09-09'); // 周三
+    expect(cells).toHaveLength(52 * 7);
+    // 最后一个格子是本周周六
+    expect(cells[cells.length - 1].date).toBe('2026-09-12');
+  });
+
+  it('有日志的日期 value=1', () => {
+    const cells = heatmapData([log('h1', '2026-09-09')], 52, '2026-09-09');
+    const hit = cells.find((c) => c.date === '2026-09-09');
+    expect(hit?.value).toBe(1);
+  });
+});
+
+describe('dailyChecked', () => {
+  it('按习惯 id 判断当日是否已打卡', () => {
+    const logs = [log('h1', '2026-09-09')];
+    expect(dailyChecked(logs, 'h1', '2026-09-09')).toBe(true);
+    expect(dailyChecked(logs, 'h2', '2026-09-09')).toBe(false);
+  });
+});

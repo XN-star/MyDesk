@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput } from '../types';
+import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput, Habit, HabitInput, HabitLog } from '../types';
 
 export const api = {
   taskList: () => invoke<Task[]>('task_list'),
@@ -10,6 +10,12 @@ export const api = {
   boardCreate: (input: BoardInput) => invoke<Board>('board_create', { input }),
   boardRename: (id: string, name: string) => invoke<Board>('board_rename', { id, name }),
   boardDelete: (id: string) => invoke<void>('board_delete', { id }),
+  habitList: () => invoke<Habit[]>('habit_list'),
+  habitCreate: (input: HabitInput) => invoke<Habit>('habit_create', { input }),
+  habitUpdate: (habit: Habit) => invoke<Habit>('habit_update', { habit }),
+  habitDelete: (id: string) => invoke<void>('habit_delete', { id }),
+  habitToggle: (id: string, date: string) => invoke<HabitLog | null>('habit_toggle', { id, date }),
+  habitLogs: (from: string, to: string) => invoke<HabitLog[]>('habit_logs', { from, to }),
   noteList: () => invoke<Note[]>('note_list'),
   noteCreate: (input: NoteInput) => invoke<Note>('note_create', { input }),
   noteUpdate: (note: Note) => invoke<Note>('note_update', { note }),
