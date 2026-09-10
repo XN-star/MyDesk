@@ -146,6 +146,29 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .edot { background: var(--accent); }
 .day-panel { padding: 16px; overflow-y: auto; }
 .day-note-btn { width: 100%; margin-top: 8px; }
+
+/* 习惯页 */
+.habits-page { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+.habits-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.habits-head h3 { margin: 0; font-size: 14px; }
+.habit-rows { display: flex; flex-direction: column; }
+.habit-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px dashed var(--border); cursor: pointer; border-radius: 8px; }
+.habit-row:last-child { border-bottom: none; }
+.habit-row.active { background: var(--bg); }
+.habit-name { font-size: 14px; }
+.habit-name.done { color: var(--muted); text-decoration: line-through; }
+.habit-freq { color: var(--muted); font-size: 12px; }
+.habit-streak { margin-left: auto; font-size: 12px; }
+.habit-score { font-size: 12px; color: var(--muted); width: 44px; text-align: right; }
+.habit-actions { display: flex; gap: 8px; }
+.habit-summary { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 10px; }
+.habit-summary b { color: var(--text); }
+.heatmap { display: flex; gap: 3px; overflow-x: auto; padding: 6px 0; }
+.heatmap-col { display: flex; flex-direction: column; gap: 3px; }
+.hcell { width: 11px; height: 11px; border-radius: 2px; background: var(--bg); border: 1px solid var(--border); flex: none; }
+.hcell.v1 { background: var(--accent); border-color: var(--accent); }
+.hcell.v2 { background: var(--border); border-color: var(--border); }
+.field-row { display: flex; align-items: center; gap: 8px; }
 .day-panel-title { font-weight: 600; margin-bottom: 8px; }
 .day-panel h4 { margin: 12px 0 6px; font-size: 13px; color: var(--muted); }
 .day-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--border); }

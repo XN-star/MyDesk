@@ -5,6 +5,7 @@ import CalendarPage from '../features/calendar/CalendarPage';
 import NotesPage from '../features/notes/NotesPage';
 import LinksPage from '../features/links/LinksPage';
 import OverviewPage from '../features/overview/OverviewPage';
+import HabitsPage from '../features/habits/HabitsPage';
 
 /** 完整模块 = 静态元数据 + 组件/路由。 */
 export interface Module {
@@ -21,6 +22,7 @@ const ROUTES: Record<string, string> = {
   overview: '/overview',
   tasks: '/tasks',
   calendar: '/calendar',
+  habits: '/habits',
   notes: '/notes',
   links: '/links',
 };
@@ -29,6 +31,7 @@ const COMPONENTS: Record<string, ComponentType> = {
   overview: OverviewPage,
   tasks: KanbanPage,
   calendar: CalendarPage,
+  habits: HabitsPage,
   notes: NotesPage,
   links: LinksPage,
 };

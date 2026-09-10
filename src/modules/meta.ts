@@ -30,6 +30,13 @@ export const MODULE_META: ModuleMeta[] = [
     defaultEnabled: true,
   },
   {
+    id: 'habits',
+    name: '习惯',
+    icon: '◉',
+    description: '打卡追踪与热力图',
+    defaultEnabled: true,
+  },
+  {
     id: 'notes',
     name: '笔记',
     icon: '✎',
