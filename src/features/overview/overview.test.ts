@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Link, Note, Task } from '../../types';
-import { frequentLinks, recentNotes, taskStats, upcomingTasks, weekReport, todayHabits } from './overview';
+import type { Link, Note, Task, TimeEntry } from '../../types';
+import { frequentLinks, recentNotes, taskStats, todayFocus, upcomingTasks, weekReport, todayHabits } from './overview';
 
 const NOW = new Date('2026-09-09T10:00:00');
 
@@ -159,5 +159,57 @@ describe('todayHabits', () => {
     const r = todayHabits(habits, logs, '2026-09-09');
     expect(r.checked).toBe(1);
     expect(r.pending).toHaveLength(0);
+  });
+});
+
+describe('todayFocus', () => {
+  function entry(id: string, taskId: string, startedAt: string, endedAt: string | null): TimeEntry {
+    return { id, taskId, startedAt, endedAt };
+  }
+  const tasks = [
+    task({ id: 'a', title: '写报告' }),
+    task({ id: 'b', title: '开会' }),
+  ]; // 注意：'gone' 不在列表中，模拟任务已删除
+
+  it('按任务聚合今日已结束条目的分钟数', () => {
+    const entries = [
+      entry('e1', 'a', '2026-09-09T09:00:00', '2026-09-09T09:25:00'), // 25 分钟
+      entry('e2', 'a', '2026-09-09T10:00:00', '2026-09-09T10:35:00'), // 35 分钟
+      entry('e3', 'b', '2026-09-09T11:00:00', '2026-09-09T11:10:00'), // 10 分钟
+    ];
+    const r = todayFocus(entries, tasks, new Date('2026-09-09T12:00:00'));
+    expect(r.totalMin).toBe(70);
+    expect(r.byTask).toEqual([
+      { taskId: 'a', title: '写报告', minutes: 60 },
+      { taskId: 'b', title: '开会', minutes: 10 },
+    ]);
+  });
+
+  it('进行中的条目计入到当前时刻', () => {
+    const entries = [entry('e1', 'a', '2026-09-09T09:50:00', null)];
+    const r = todayFocus(entries, tasks, new Date('2026-09-09T10:00:00'));
+    expect(r.totalMin).toBe(10);
+  });
+
+  it('昨天的条目不计入；已删除任务的条目按 (已删除) 显示', () => {
+    const entries = [
+      entry('e1', 'a', '2026-09-08T09:00:00', '2026-09-08T09:30:00'),
+      entry('e2', 'gone', '2026-09-09T09:00:00', '2026-09-09T09:20:00'),
+    ];
+    const r = todayFocus(entries, tasks, new Date('2026-09-09T12:00:00'));
+    expect(r.totalMin).toBe(20);
+    expect(r.byTask).toEqual([{ taskId: 'gone', title: '（已删除任务）', minutes: 20 }]);
+  });
+
+  it('byTask 按时长降序取前三', () => {
+    const entries = [
+      entry('e1', 'a', '2026-09-09T09:00:00', '2026-09-09T09:10:00'),
+      entry('e2', 'b', '2026-09-09T10:00:00', '2026-09-09T10:30:00'),
+      entry('e3', 'c', '2026-09-09T11:00:00', '2026-09-09T11:20:00'),
+      entry('e4', 'd', '2026-09-09T12:00:00', '2026-09-09T12:40:00'),
+    ];
+    const all = [...tasks, task({ id: 'c', title: '复盘' }), task({ id: 'd', title: '阅读' })];
+    const r = todayFocus(entries, all, new Date('2026-09-09T13:00:00'));
+    expect(r.byTask.map((x) => x.taskId)).toEqual(['d', 'b', 'c']);
   });
 });

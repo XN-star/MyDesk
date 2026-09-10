@@ -1,12 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { dueLabel, timeShort, toDateStr } from '../../lib/format';
+import { api } from '../../lib/api';
+import type { TimeEntry } from '../../types';
 import { useHabitsStore } from '../../stores/habits';
 import { useLinksStore } from '../../stores/links';
 import { useNotesStore } from '../../stores/notes';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
 import { kindIcon } from '../links/links';
-import { frequentLinks, recentNotes, taskStats, todayHabits, upcomingTasks, weekReport } from './overview';
+import { frequentLinks, recentNotes, taskStats, todayFocus, todayHabits, upcomingTasks, weekReport } from './overview';
+import { useTimerStore } from '../../stores/timer';
 
 export default function OverviewPage() {
   const tasks = useTaskStore((s) => s.tasks);
@@ -19,6 +22,8 @@ export default function OverviewPage() {
   const habits = useHabitsStore((s) => s.habits);
   const habitLogs = useHabitsStore((s) => s.logs);
   const loadHabits = useHabitsStore((s) => s.load);
+  const running = useTimerStore((s) => s.running);
+  const loadTimer = useTimerStore((s) => s.load);
   const setPage = useUiStore((s) => s.setPage);
 
   useEffect(() => {
@@ -26,7 +31,20 @@ export default function OverviewPage() {
     void loadNotes();
     void loadLinks();
     void loadHabits();
-  }, [loadTasks, loadNotes, loadLinks, loadHabits]);
+    void loadTimer();
+  }, [loadTasks, loadNotes, loadLinks, loadHabits, loadTimer]);
+
+  // 30s 拉一次今日计时条目；进行中条目的分钟数由 timer store 心跳带动重算
+  useEffect(() => {
+    const t = setInterval(() => void loadTimer(), 30_000);
+    return () => clearInterval(t);
+  }, [loadTimer]);
+  const [dayEntries, setDayEntries] = useState<TimeEntry[]>([]);
+  useEffect(() => {
+    const dayStart = `${toDateStr(new Date())}T00:00:00`;
+    const dayEnd = `${toDateStr(new Date())}T23:59:59`;
+    api.timeEntries(dayStart, dayEnd).then(setDayEntries).catch(() => {});
+  }, [running]);
 
   const stats = taskStats(tasks, new Date());
   const upcoming = upcomingTasks(tasks, new Date());
@@ -35,6 +53,7 @@ export default function OverviewPage() {
   const week = weekReport(tasks, new Date());
   const today = toDateStr(new Date());
   const habitsToday = todayHabits(habits, habitLogs, today);
+  const focus = todayFocus(dayEntries, tasks, new Date());
   const delta = (cur: number, prev: number) => {
     const d = cur - prev;
     if (d === 0) return <span className="ov-delta">持平</span>;
@@ -132,6 +151,28 @@ export default function OverviewPage() {
                   ))}
                 </ul>
               )}
+            </>
+          )}
+        </button>
+        <button className="panel overview-card" onClick={() => setPage('tasks')}>
+          <h3>⏱ 今日专注</h3>
+          {focus.totalMin === 0 ? (
+            <p className="muted">今天还没有专注记录</p>
+          ) : (
+            <>
+              <div className="overview-stats">
+                <span>
+                  <b>{focus.totalMin}</b> 分钟
+                </span>
+              </div>
+              <ul className="overview-list">
+                {focus.byTask.map((x) => (
+                  <li key={x.taskId}>
+                    <span className="ov-title">{x.title}</span>
+                    <span className="ov-time">{x.minutes} 分钟</span>
+                  </li>
+                ))}
+              </ul>
             </>
           )}
         </button>

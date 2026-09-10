@@ -1,4 +1,4 @@
-import type { Habit, HabitLog, Link, Note, Task } from '../../types';
+import type { Habit, HabitLog, Link, Note, Task, TimeEntry } from '../../types';
 import { fromDate, toDateStr } from '../../lib/format';
 import { dailyChecked } from '../habits/habits';
 
@@ -123,4 +123,45 @@ export interface TodayHabits {
 export function todayHabits(habits: Habit[], logs: HabitLog[], date: string): TodayHabits {
   const pending = habits.filter((h) => !dailyChecked(logs, h.id, date));
   return { total: habits.length, checked: habits.length - pending.length, pending };
+}
+
+export interface FocusByTask {
+  taskId: string;
+  title: string;
+  minutes: number;
+}
+
+export interface TodayFocus {
+  /** 今日专注总分钟数（含进行中条目到当前时刻） */
+  totalMin: number;
+  /** 按任务分布，时长降序，最多前三 */
+  byTask: FocusByTask[];
+}
+
+/** 今日工时总结：按任务聚合计时条目（秒向下取整为分钟）。 */
+export function todayFocus(entries: TimeEntry[], tasks: Task[], now: Date): TodayFocus {
+  const today = toDateStr(now);
+  const titleOf = new Map(tasks.map((t) => [t.id, t.title]));
+  const minutesOf = new Map<string, number>();
+  let totalSec = 0;
+  for (const e of entries) {
+    if (!e.startedAt.startsWith(today)) continue;
+    const endMs = e.endedAt ? new Date(e.endedAt).getTime() : now.getTime();
+    const startMs = new Date(e.startedAt).getTime();
+    if (Number.isNaN(startMs)) continue;
+    const sec = Math.max(0, Math.floor((endMs - startMs) / 1000));
+    if (sec === 0) continue;
+    totalSec += sec;
+    minutesOf.set(e.taskId, (minutesOf.get(e.taskId) ?? 0) + sec);
+  }
+  const byTask = [...minutesOf.entries()]
+    .map(([taskId, sec]) => ({
+      taskId,
+      title: titleOf.get(taskId) ?? '（已删除任务）',
+      minutes: Math.floor(sec / 60),
+    }))
+    .filter((x) => x.minutes > 0)
+    .sort((a, b) => b.minutes - a.minutes)
+    .slice(0, 3);
+  return { totalMin: Math.floor(totalSec / 60), byTask };
 }
