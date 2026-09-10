@@ -2,6 +2,16 @@
 
 MyDesk 个人工作台（PersonalWorkstation）。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.0.1] - 2026-09-10
+
+三项用户反馈修复。
+
+### 修复
+
+- **桌面小组件白板**：WidgetWindow 此前在 React 管理的 root 容器里手动 `appendChild` 渲染（组件本体 `return null`），React 挂载/重渲染时清空容器导致内容被抹掉。改为纯 React 声明式渲染（useState + useEffect 轮询）。
+- **专注无入口**：番茄钟唯一入口藏在「计时中才显示」的计时条里、任务计时器入口过深。新增**专注模块页**（侧栏 ⏱，默认启用）：任务选择、开始/停止计时、番茄钟档位与启动、今日工时按任务分布；概览「今日专注」卡片点击改跳本页。
+- **深色主题下习惯提醒时间选择器被遮挡**：全局补 `color-scheme: light/dark` 声明，原生 `<input type=time>` 时钟图标与下拉面板跟随主题渲染。
+
 ## [1.0.0] - 2026-09-10
 
 桌面版：存在感延伸与工程化补课，v1.0 正式发布。
