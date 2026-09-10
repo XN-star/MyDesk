@@ -140,6 +140,87 @@ CREATE TABLE IF NOT EXISTS habit_logs (
 CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs (habit_id, date);
 ";
 
+/// v8 建表语句（新库直接为此形态）：v7 全部 + time_entries。
+pub const SCHEMA_V8: &str = "
+CREATE TABLE IF NOT EXISTS tasks (
+  id          TEXT PRIMARY KEY,
+  board_id    TEXT NOT NULL DEFAULT 'default',
+  title       TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'todo',
+  priority    INTEGER NOT NULL DEFAULT 1,
+  due_at      TEXT,
+  sort_order  REAL NOT NULL,
+  done_at     TEXT,
+  remind_minutes_before INTEGER,
+  repeat      TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notes (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  content    TEXT NOT NULL DEFAULT '',
+  pinned     INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS links (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  kind       TEXT NOT NULL DEFAULT 'url',
+  target     TEXT NOT NULL,
+  sort_order REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS boards (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habits (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  frequency  TEXT NOT NULL DEFAULT 'daily',
+  reminder   TEXT,
+  archived   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habit_logs (
+  id       TEXT PRIMARY KEY,
+  habit_id TEXT NOT NULL,
+  date     TEXT NOT NULL,
+  value    INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(habit_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs (habit_id, date);
+CREATE TABLE IF NOT EXISTS time_entries (
+  id         TEXT PRIMARY KEY,
+  task_id    TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  ended_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries (task_id, started_at);
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+";
+
+/// v7→v8：新增 time_entries 表。
+pub const MIGRATE_V8: &str = "
+CREATE TABLE IF NOT EXISTS time_entries (
+  id         TEXT PRIMARY KEY,
+  task_id    TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  ended_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries (task_id, started_at);
+";
+
 /// v6 建表语句，仅用于迁移测试中构造 v6 库。
 pub const SCHEMA_V6_FULL: &str = "
 CREATE TABLE IF NOT EXISTS tasks (
@@ -381,7 +462,7 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
-        // 全新库：直接建 v7 形态。
+        // 全新库：直接建 v8 形态。
         // version==0 且已存在 events/tasks 表的极端情况（手动建的 v1/v2 库）按旧版处理。
         let has_events: bool = table_exists(conn, "events")?;
         let has_tasks: bool = table_exists(conn, "tasks")?;
@@ -393,9 +474,9 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             conn.execute_batch(SCHEMA_V2)?;
             upgrade_to_v3(conn)?;
         } else {
-            conn.execute_batch(SCHEMA_V7)?;
+            conn.execute_batch(SCHEMA_V8)?;
             seed_default_board(conn)?;
-            conn.pragma_update(None, "user_version", 7)?;
+            conn.pragma_update(None, "user_version", 8)?;
             return Ok(());
         }
     } else if version == 1 {
@@ -408,7 +489,8 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     upgrade_to_v5(conn)?;
     upgrade_to_v6(conn)?;
     upgrade_to_v7(conn)?;
-    conn.pragma_update(None, "user_version", 7)?;
+    upgrade_to_v8(conn)?;
+    conn.pragma_update(None, "user_version", 8)?;
     Ok(())
 }
 
@@ -450,6 +532,13 @@ fn upgrade_to_v7(conn: &Connection) -> rusqlite::Result<()> {
     }
     if !column_exists(conn, "tasks", "repeat")? {
         conn.execute_batch("ALTER TABLE tasks ADD COLUMN repeat TEXT;")?;
+    }
+    Ok(())
+}
+
+fn upgrade_to_v8(conn: &Connection) -> rusqlite::Result<()> {
+    if !table_exists(conn, "time_entries")? {
+        conn.execute_batch(MIGRATE_V8)?;
     }
     Ok(())
 }
@@ -515,7 +604,7 @@ mod tests {
             .unwrap();
         assert_eq!(n, 5);
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         assert!(column_exists(&c, "tasks", "remind_minutes_before").unwrap());
         assert!(column_exists(&c, "notes", "pinned").unwrap());
         assert!(column_exists(&c, "links", "target").unwrap());
@@ -542,7 +631,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         let events: i64 = c
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
@@ -572,7 +661,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -597,7 +686,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -624,7 +713,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
@@ -650,7 +739,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         let name: String = c
             .query_row("SELECT name FROM boards WHERE id='default'", [], |r| r.get(0))
             .unwrap();
@@ -672,11 +761,57 @@ mod tests {
             )
             .unwrap();
         assert_eq!(n, 7);
-        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 7);
         assert!(column_exists(&c, "tasks", "repeat").unwrap());
         assert!(column_exists(&c, "habits", "reminder").unwrap());
         assert!(column_exists(&c, "habit_logs", "value").unwrap());
+    }
+
+    #[test]
+    fn fresh_db_creates_all_tables_at_v8() {
+        let c = mem();
+        let n: i64 = c
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('tasks','settings','notes','links','boards','habits','habit_logs','time_entries')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 8);
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 8);
+        assert!(column_exists(&c, "time_entries", "task_id").unwrap());
+        assert!(column_exists(&c, "time_entries", "ended_at").unwrap());
+    }
+
+    #[test]
+    fn v7_db_upgrades_to_v8_keeps_data() {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch(SCHEMA_V7).unwrap();
+        c.execute_batch("PRAGMA user_version = 7;").unwrap();
+        c.execute(
+            "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, repeat, created_at, updated_at) VALUES ('t1', 'default', '旧任务', '', 'todo', 1, NULL, 100.0, NULL, 0, NULL, '2026-09-10T10:00:00', '2026-09-10T10:00:00')",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO habits (id, name, frequency, reminder, archived, created_at, updated_at) VALUES ('h1', '健身', 'daily', NULL, 0, '2026-09-10T10:00:00', '2026-09-10T10:00:00')",
+            [],
+        )
+        .unwrap();
+
+        migrate(&c).unwrap();
+
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 8);
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
+            1
+        );
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM habits", [], |r| r.get::<_, i64>(0)).unwrap(),
+            1
+        );
+        assert!(table_exists(&c, "time_entries").unwrap());
     }
 
     #[test]
@@ -698,7 +833,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 7);
+        assert_eq!(v, 8);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
