@@ -169,6 +169,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .hcell.v1 { background: var(--accent); border-color: var(--accent); }
 .hcell.v2 { background: var(--border); border-color: var(--border); }
 .field-row { display: flex; align-items: center; gap: 8px; }
+.repeat-badge { margin-right: 5px; color: var(--accent); font-weight: 600; }
 .day-panel-title { font-weight: 600; margin-bottom: 8px; }
 .day-panel h4 { margin: 12px 0 6px; font-size: 13px; color: var(--muted); }
 .day-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--border); }

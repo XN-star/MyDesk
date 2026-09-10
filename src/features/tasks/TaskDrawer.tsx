@@ -3,6 +3,8 @@ import DatePicker from '../../components/DatePicker';
 import TimeSpinner from '../../components/TimeSpinner';
 import { dateOf } from '../../lib/format';
 import { REMIND_OPTIONS, remindToNumber, remindToString } from '../../lib/remind';
+import { REPEAT_LABEL } from './repeat';
+import type { Repeat } from './repeat';
 import { useBoardsStore } from '../../stores/boards';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
@@ -17,7 +19,7 @@ const PRIORITY_OPTIONS = [
 export default function TaskDrawer() {
   const drawer = useUiStore((s) => s.drawer)!;
   const { closeDrawer, toast } = useUiStore();
-  const { tasks, create, update, remove } = useTaskStore();
+  const { tasks, create, update, remove, complete } = useTaskStore();
   const editing = drawer.mode === 'edit' ? tasks.find((t) => t.id === drawer.taskId) : undefined;
 
   const [title, setTitle] = useState(editing?.title ?? '');
@@ -29,6 +31,7 @@ export default function TaskDrawer() {
   );
   const [hasDue, setHasDue] = useState(!!editing?.dueAt);
   const [remind, setRemind] = useState<string>(remindToString(editing?.remindMinutesBefore ?? 0));
+  const [repeat, setRepeat] = useState<Repeat | null>(editing?.repeat ?? null);
   const [status, setStatus] = useState(
     editing?.status ?? (drawer.mode === 'create' ? drawer.status : 'todo'),
   );
@@ -63,9 +66,10 @@ export default function TaskDrawer() {
           status,
           remindMinutesBefore,
           boardId,
+          repeat,
         });
       } else if (editing) {
-        await update({
+        const next = {
           ...editing,
           title: title.trim(),
           description,
@@ -74,7 +78,14 @@ export default function TaskDrawer() {
           status,
           remindMinutesBefore,
           boardId,
-        });
+          repeat,
+        };
+        // 编辑中把状态改为 done 且带重复规则 → 走顺延生成
+        if (status === 'done' && editing.status !== 'done' && repeat) {
+          await complete({ ...next, doneAt: null });
+        } else {
+          await update(next);
+        }
       }
       toast('已保存');
       closeDrawer();
@@ -152,6 +163,23 @@ export default function TaskDrawer() {
               {REMIND_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {hasDue && (
+          <div className="field">
+            <label>重复（完成后自动生成下一单）</label>
+            <select
+              className="input"
+              value={repeat ?? ''}
+              onChange={(e) => setRepeat((e.target.value || null) as Repeat | null)}
+            >
+              <option value="">不重复</option>
+              {(Object.keys(REPEAT_LABEL) as Repeat[]).map((r) => (
+                <option key={r} value={r}>
+                  {REPEAT_LABEL[r]}
                 </option>
               ))}
             </select>

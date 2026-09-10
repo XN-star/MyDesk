@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { api } from '../lib/api';
 import type { Task, TaskInput, TaskStatus } from '../types';
 import { applyMove } from '../features/tasks/dnd';
+import { nextOccurrence } from '../features/tasks/repeat';
+import { fromDate } from '../lib/format';
 import { useUiStore } from './ui';
 
 interface TaskState {
@@ -11,6 +13,8 @@ interface TaskState {
   update: (task: Task) => Promise<void>;
   remove: (id: string) => Promise<void>;
   move: (taskId: string, status: TaskStatus, index: number) => Promise<void>;
+  /** 完成任务；repeat 任务顺延生成下一单（返回新任务，普通任务返回 null）。 */
+  complete: (task: Task) => Promise<Task | null>;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -53,5 +57,23 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         await useTaskStore.getState().load();
       }
     }
+  },
+  complete: async (task) => {
+    await get().update({
+      ...task,
+      status: 'done',
+      doneAt: fromDate(new Date()),
+    });
+    const nextDue = nextOccurrence(task.dueAt, task.repeat);
+    if (!nextDue) return null;
+    return await get().create({
+      title: task.title,
+      description: task.description,
+      priority: task.priority,
+      dueAt: nextDue,
+      remindMinutesBefore: task.remindMinutesBefore,
+      boardId: task.boardId,
+      repeat: task.repeat,
+    });
   },
 }));

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import TimeSpinner from '../../components/TimeSpinner';
-import { fromDate } from '../../lib/format';
 import { REMIND_OPTIONS, remindToNumber } from '../../lib/remind';
 import { useNotesStore } from '../../stores/notes';
 import { useSettingsStore } from '../../stores/settings';
@@ -35,11 +34,15 @@ export default function DayPanel({ date }: { date: string }) {
     const t = tasks.find((x) => x.id === id);
     if (!t) return;
     const done = t.status !== 'done';
-    await useTaskStore.getState().update({
-      ...t,
-      status: done ? 'done' : 'todo',
-      doneAt: done ? fromDate(new Date()) : null,
-    });
+    if (done) {
+      await useTaskStore.getState().complete(t);
+    } else {
+      await useTaskStore.getState().update({
+        ...t,
+        status: 'todo',
+        doneAt: null,
+      });
+    }
   }
 
   async function openDailyNote() {
