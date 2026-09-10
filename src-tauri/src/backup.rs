@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-pub const VERSION: i64 = 7;
+pub const VERSION: i64 = 8;
 
 pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let tasks = query_all_tasks(conn)?;
@@ -13,6 +13,7 @@ pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let boards = query_all_boards(conn)?;
     let habits = query_all_habits(conn)?;
     let habit_logs = query_logs_between(conn, "0000-01-01", "9999-12-31")?;
+    let time_entries = query_entries_between(conn, "0000-01-01T00:00:00", "9999-12-31T23:59:59")?;
     let settings = query_all_settings(conn)?;
     let doc = json!({
         "version": VERSION,
@@ -23,6 +24,7 @@ pub fn export(conn: &Connection, path: &Path) -> Result<()> {
         "boards": boards,
         "habits": habits,
         "habitLogs": habit_logs,
+        "timeEntries": time_entries,
         "settings": settings,
     });
     std::fs::write(path, serde_json::to_vec_pretty(&doc)?)?;
@@ -76,6 +78,11 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     };
     let habit_logs: Vec<HabitLog> = match doc.get("habitLogs") {
         Some(v) => serde_json::from_value(v.clone()).context("habitLogs 字段格式错误")?,
+        None => Vec::new(),
+    };
+    // v1–v7 备份没有 timeEntries 字段，视为空（整库替换语义）。
+    let time_entries: Vec<TimeEntry> = match doc.get("timeEntries") {
+        Some(v) => serde_json::from_value(v.clone()).context("timeEntries 字段格式错误")?,
         None => Vec::new(),
     };
 
@@ -144,6 +151,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     tx.execute("DELETE FROM boards", [])?;
     tx.execute("DELETE FROM habits", [])?;
     tx.execute("DELETE FROM habit_logs", [])?;
+    tx.execute("DELETE FROM time_entries", [])?;
     tx.execute("DELETE FROM settings", [])?;
     for t in tasks.iter().chain(converted.iter()) {
         tx.execute(
@@ -192,6 +200,12 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
             params![l.id, l.habit_id, l.date, l.value],
         )?;
     }
+    for e in &time_entries {
+        tx.execute(
+            TIME_ENTRY_INSERT,
+            params![e.id, e.task_id, e.started_at, e.ended_at],
+        )?;
+    }
     // 任何备份导入后保证 default 看板存在
     tx.execute(
         "INSERT OR IGNORE INTO boards (id, name, created_at, updated_at) VALUES ('default', '默认看板', '2026-09-09T00:00:00', '2026-09-09T00:00:00')",
@@ -201,7 +215,13 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
         tx.execute(SETTING_INSERT, params![s.key, s.value])?;
     }
     tx.commit()?;
-    Ok(tasks.len() + converted.len() + notes.len() + links.len() + habits.len() + habit_logs.len())
+    Ok(tasks.len()
+        + converted.len()
+        + notes.len()
+        + links.len()
+        + habits.len()
+        + habit_logs.len()
+        + time_entries.len())
 }
 
 #[cfg(test)]
@@ -236,7 +256,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 7);
+        assert_eq!(doc["version"], 8);
         std::fs::remove_file(&file).ok();
     }
 
@@ -260,7 +280,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 7);
+        assert_eq!(doc["version"], 8);
         std::fs::remove_file(&file).ok();
     }
 
@@ -312,7 +332,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 7);
+        assert_eq!(doc["version"], 8);
         std::fs::remove_file(&file).ok();
     }
 
@@ -364,7 +384,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 7);
+        assert_eq!(doc["version"], 8);
         std::fs::remove_file(&file).ok();
     }
 
@@ -492,7 +512,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 7);
+        assert_eq!(doc["version"], 8);
         std::fs::remove_file(&file).ok();
     }
 
@@ -534,6 +554,61 @@ mod tests {
         import(&mut dst, &file).unwrap();
         let t = query_all_tasks(&dst).unwrap();
         assert_eq!(t[0].repeat.as_deref(), Some("daily"));
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_preserves_time_entries() {
+        let src = mem();
+        src.execute(TASK_INSERT, params!["t1", "default", "写报告", "", "todo", 1, None::<String>, 100.0, None::<String>, Some(0), None::<String>, "2026-09-10T09:00:00", "2026-09-10T09:00:00"]).unwrap();
+        src.execute(
+            crate::models::TIME_ENTRY_INSERT,
+            params!["e1", "t1", "2026-09-10T09:00:00", Some("2026-09-10T09:25:00")],
+        )
+        .unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-time-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+
+        let mut dst = mem();
+        import(&mut dst, &file).unwrap();
+        let entries = crate::models::query_entries_between(&dst, "0000-01-01T00:00:00", "9999-12-31T23:59:59").unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].task_id, "t1");
+        assert_eq!(entries[0].ended_at.as_deref(), Some("2026-09-10T09:25:00"));
+
+        let text = std::fs::read_to_string(&file).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["version"], 8);
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn import_v7_backup_without_time_entries_is_accepted() {
+        let file = std::env::temp_dir().join(format!("ws-bk-v7not-{}.json", std::process::id()));
+        std::fs::write(
+            &file,
+            r#"{
+              "version": 7,
+              "tasks": [],
+              "notes": [],
+              "links": [],
+              "boards": [],
+              "habits": [],
+              "habitLogs": [],
+              "settings": []
+            }"#,
+        )
+        .unwrap();
+
+        let mut c = mem();
+        c.execute(crate::models::TIME_ENTRY_INSERT, params!["e-old", "t1", "2026-09-10T09:00:00", Some("2026-09-10T09:25:00")]).unwrap();
+        let n = import(&mut c, &file).unwrap();
+        assert_eq!(n, 0);
+        assert_eq!(
+            crate::models::query_entries_between(&c, "0000-01-01T00:00:00", "9999-12-31T23:59:59").unwrap().len(),
+            0,
+            "旧备份无 timeEntries，整库替换后为空"
+        );
         std::fs::remove_file(&file).ok();
     }
 }
