@@ -1,8 +1,8 @@
 use rusqlite::{params, Connection, Row};
 use serde::{Deserialize, Serialize};
 
-pub const TASK_COLS: &str = "id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at";
-pub const TASK_INSERT: &str = "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)";
+pub const TASK_COLS: &str = "id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, repeat, created_at, updated_at";
+pub const TASK_INSERT: &str = "INSERT INTO tasks (id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, repeat, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)";
 pub const SETTING_INSERT: &str = "INSERT INTO settings (key, value) VALUES (?1, ?2)";
 pub const NOTE_COLS: &str = "id, title, content, pinned, created_at, updated_at";
 pub const NOTE_INSERT: &str =
@@ -13,6 +13,12 @@ pub const LINK_INSERT: &str =
 pub const BOARD_COLS: &str = "id, name, created_at, updated_at";
 pub const BOARD_INSERT: &str =
     "INSERT INTO boards (id, name, created_at, updated_at) VALUES (?1,?2,?3,?4)";
+pub const HABIT_COLS: &str = "id, name, frequency, reminder, archived, created_at, updated_at";
+pub const HABIT_INSERT: &str =
+    "INSERT INTO habits (id, name, frequency, reminder, archived, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7)";
+pub const HABIT_LOG_COLS: &str = "id, habit_id, date, value";
+pub const HABIT_LOG_INSERT: &str =
+    "INSERT INTO habit_logs (id, habit_id, date, value) VALUES (?1,?2,?3,?4)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,6 +34,8 @@ pub struct Task {
     pub done_at: Option<String>,
     /// 提前提醒分钟数：None=不提醒，0=准点，n=提前 n 分钟。
     pub remind_minutes_before: Option<i64>,
+    /// 重复规则：None=一次性；Some("daily"|"weekly"|"monthly")=到期完成时顺延生成下一单。
+    pub repeat: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -48,6 +56,8 @@ pub struct TaskInput {
     pub remind_minutes_before: Option<i64>,
     #[serde(default)]
     pub board_id: Option<String>,
+    #[serde(default)]
+    pub repeat: Option<String>,
 }
 
 fn dft_priority() -> i64 {
@@ -125,6 +135,44 @@ pub struct BoardInput {
     pub name: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Habit {
+    pub id: String,
+    pub name: String,
+    /// daily | weekly | monthly
+    pub frequency: String,
+    /// 每日提醒时刻 'HH:MM'；None=不提醒。
+    pub reminder: Option<String>,
+    pub archived: bool,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HabitInput {
+    pub name: String,
+    #[serde(default = "dft_frequency")]
+    pub frequency: String,
+    #[serde(default)]
+    pub reminder: Option<String>,
+}
+
+fn dft_frequency() -> String {
+    "daily".into()
+}
+
+/// 打卡日志：value 1=完成 0=未完成 2=跳过（分数冻结）。UNIQUE(habit_id, date)。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HabitLog {
+    pub id: String,
+    pub habit_id: String,
+    pub date: String,
+    pub value: i64,
+}
+
 pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
@@ -137,8 +185,9 @@ pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
         sort_order: r.get(7)?,
         done_at: r.get(8)?,
         remind_minutes_before: r.get(9)?,
-        created_at: r.get(10)?,
-        updated_at: r.get(11)?,
+        repeat: r.get(10)?,
+        created_at: r.get(11)?,
+        updated_at: r.get(12)?,
     })
 }
 
@@ -218,6 +267,43 @@ pub fn query_one_board(c: &Connection, id: &str) -> rusqlite::Result<Board> {
     )
 }
 
+pub fn habit_from_row(r: &Row) -> rusqlite::Result<Habit> {
+    Ok(Habit {
+        id: r.get(0)?,
+        name: r.get(1)?,
+        frequency: r.get(2)?,
+        reminder: r.get(3)?,
+        archived: r.get::<_, i64>(4)? != 0,
+        created_at: r.get(5)?,
+        updated_at: r.get(6)?,
+    })
+}
+
+pub fn query_all_habits(c: &Connection) -> rusqlite::Result<Vec<Habit>> {
+    let mut stmt =
+        c.prepare(&format!("SELECT {HABIT_COLS} FROM habits WHERE archived=0 ORDER BY created_at"))?;
+    let rows = stmt.query_map([], habit_from_row)?;
+    rows.collect()
+}
+
+pub fn habit_log_from_row(r: &Row) -> rusqlite::Result<HabitLog> {
+    Ok(HabitLog {
+        id: r.get(0)?,
+        habit_id: r.get(1)?,
+        date: r.get(2)?,
+        value: r.get(3)?,
+    })
+}
+
+/// 区间日志（含边界），按习惯与日期排序。
+pub fn query_logs_between(c: &Connection, from: &str, to: &str) -> rusqlite::Result<Vec<HabitLog>> {
+    let mut stmt = c.prepare(&format!(
+        "SELECT {HABIT_LOG_COLS} FROM habit_logs WHERE date >= ?1 AND date <= ?2 ORDER BY habit_id, date"
+    ))?;
+    let rows = stmt.query_map(params![from, to], habit_log_from_row)?;
+    rows.collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,7 +318,7 @@ mod tests {
     #[test]
     fn task_roundtrip_via_row_mapping() {
         let c = mem();
-        c.execute(TASK_INSERT, params!["t1", "default", "写报告", "周报", "todo", 2, "2026-09-08T10:00:00", 100.0, None::<String>, Some(15), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["t1", "default", "写报告", "周报", "todo", 2, "2026-09-08T10:00:00", 100.0, None::<String>, Some(15), None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         let got = query_all_tasks(&c).unwrap();
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].title, "写报告");
@@ -240,6 +326,58 @@ mod tests {
         assert_eq!(got[0].priority, 2);
         assert_eq!(got[0].board_id, "default");
         assert_eq!(got[0].remind_minutes_before, Some(15));
+        assert_eq!(got[0].repeat, None);
+    }
+
+    #[test]
+    fn task_repeat_roundtrip() {
+        let c = mem();
+        c.execute(TASK_INSERT, params!["t1", "default", "喝水", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(0), Some("daily"), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        let got = query_all_tasks(&c).unwrap();
+        assert_eq!(got[0].repeat.as_deref(), Some("daily"));
+    }
+
+    #[test]
+    fn task_input_repeat_default_none() {
+        let json = r#"{"title":"一次性"}"#;
+        let input: TaskInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.repeat, None);
+        let json2 = r#"{"title":"每天","repeat":"weekly"}"#;
+        let input2: TaskInput = serde_json::from_str(json2).unwrap();
+        assert_eq!(input2.repeat.as_deref(), Some("weekly"));
+    }
+
+    #[test]
+    fn habit_roundtrip_and_order() {
+        let c = mem();
+        c.execute(HABIT_INSERT, params!["h1", "健身", "weekly", Some("08:00"), 0, "2026-09-09T10:00:00", "2026-09-09T10:00:00"]).unwrap();
+        c.execute(HABIT_INSERT, params!["h2", "喝水", "daily", None::<String>, 0, "2026-09-09T09:00:00", "2026-09-09T09:00:00"]).unwrap();
+        let got = query_all_habits(&c).unwrap();
+        let ids: Vec<&str> = got.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(ids, vec!["h2", "h1"], "按 created_at 升序");
+        assert_eq!(got[0].frequency, "daily");
+        assert_eq!(got[0].reminder, None);
+        assert!(!got[0].archived);
+        assert_eq!(got[1].reminder.as_deref(), Some("08:00"));
+    }
+
+    #[test]
+    fn habit_input_defaults() {
+        let json = r#"{"name":"晨读"}"#;
+        let input: HabitInput = serde_json::from_str(json).unwrap();
+        assert_eq!(input.frequency, "daily");
+        assert_eq!(input.reminder, None);
+    }
+
+    #[test]
+    fn habit_log_roundtrip_and_range_query() {
+        let c = mem();
+        c.execute(HABIT_LOG_INSERT, params!["l1", "h1", "2026-09-01", 1]).unwrap();
+        c.execute(HABIT_LOG_INSERT, params!["l2", "h1", "2026-09-05", 1]).unwrap();
+        c.execute(HABIT_LOG_INSERT, params!["l3", "h2", "2026-09-02", 1]).unwrap();
+        let got = query_logs_between(&c, "2026-09-01", "2026-09-04").unwrap();
+        let ids: Vec<&str> = got.iter().map(|l| l.id.as_str()).collect();
+        assert_eq!(ids, vec!["l1", "l3"], "区间内按 habit_id, date 排序");
     }
 
     #[test]

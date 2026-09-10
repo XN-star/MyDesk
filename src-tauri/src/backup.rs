@@ -117,6 +117,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
                 sort_order: 100.0,
                 done_at: None,
                 remind_minutes_before: Some(0),
+                repeat: None,
                 created_at: created.clone(),
                 updated_at: created,
             });
@@ -143,6 +144,7 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
                 t.sort_order,
                 t.done_at,
                 t.remind_minutes_before,
+                t.repeat,
                 t.created_at,
                 t.updated_at
             ],
@@ -188,7 +190,7 @@ mod tests {
     }
 
     fn seed(c: &rusqlite::Connection) {
-        c.execute(TASK_INSERT, params!["t1", "default", "任务A", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(0), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["t1", "default", "任务A", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(0), None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         c.execute(SETTING_INSERT, params!["theme", "\"dark\""]).unwrap();
     }
 
@@ -369,7 +371,7 @@ mod tests {
     #[test]
     fn export_import_preserves_remind_field() {
         let src = mem();
-        src.execute(TASK_INSERT, params!["t2", "default", "提前提醒任务", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(30), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        src.execute(TASK_INSERT, params!["t2", "default", "提前提醒任务", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(30), None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         let file = std::env::temp_dir().join(format!("ws-bk-remind-{}.json", std::process::id()));
         export(&src, &file).unwrap();
         let mut dst = mem();
@@ -416,7 +418,7 @@ mod tests {
         let file = std::env::temp_dir().join(format!("ws-bk-bad-{}.json", std::process::id()));
         std::fs::write(&file, r#"{"version": 99, "tasks": []}"#).unwrap();
         let mut c = mem();
-        c.execute(TASK_INSERT, params!["keep", "default", "保留", "", "todo", 1, None::<String>, 100.0, None::<String>, Some(0), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["keep", "default", "保留", "", "todo", 1, None::<String>, 100.0, None::<String>, Some(0), None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         let err = import(&mut c, &file).unwrap_err();
         assert!(err.to_string().contains("不支持的备份版本"));
         assert_eq!(query_all_tasks(&c).unwrap().len(), 1, "校验失败必须零写入");

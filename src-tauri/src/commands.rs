@@ -44,6 +44,7 @@ pub fn task_create(db: DbState, input: TaskInput) -> Result<Task, String> {
             sort_order: max + 100.0,
             done_at: None,
             remind_minutes_before: input.remind_minutes_before,
+            repeat: input.repeat,
             created_at: now.clone(),
             updated_at: now,
         };
@@ -60,6 +61,7 @@ pub fn task_create(db: DbState, input: TaskInput) -> Result<Task, String> {
                 t.sort_order,
                 t.done_at,
                 t.remind_minutes_before,
+                t.repeat,
                 t.created_at,
                 t.updated_at
             ],
@@ -72,7 +74,7 @@ pub fn task_create(db: DbState, input: TaskInput) -> Result<Task, String> {
 pub fn task_update(db: DbState, task: Task) -> Result<Task, String> {
     with_conn(db, move |c| {
         c.execute(
-            "UPDATE tasks SET board_id=?2, title=?3, description=?4, status=?5, priority=?6, due_at=?7, sort_order=?8, done_at=?9, remind_minutes_before=?10, updated_at=?11 WHERE id=?1",
+            "UPDATE tasks SET board_id=?2, title=?3, description=?4, status=?5, priority=?6, due_at=?7, sort_order=?8, done_at=?9, remind_minutes_before=?10, repeat=?11, updated_at=?12 WHERE id=?1",
             params![
                 task.id,
                 task.board_id,
@@ -84,6 +86,7 @@ pub fn task_update(db: DbState, task: Task) -> Result<Task, String> {
                 task.sort_order,
                 task.done_at,
                 task.remind_minutes_before,
+                task.repeat,
                 now_iso()
             ],
         )?;
@@ -293,8 +296,106 @@ pub fn link_run(db: DbState, id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn settings_all(db: DbState) -> Result<HashMap<String, String>, String> {
-    with_conn(db, |c| {
+pub fn habit_list(db: DbState) -> Result<Vec<Habit>, String> {
+    with_conn(db, query_all_habits)
+}
+
+#[tauri::command]
+pub fn habit_create(db: DbState, input: HabitInput) -> Result<Habit, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        let h = Habit {
+            id: Uuid::new_v4().to_string(),
+            name: input.name,
+            frequency: input.frequency,
+            reminder: input.reminder,
+            archived: false,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        c.execute(
+            HABIT_INSERT,
+            params![h.id, h.name, h.frequency, h.reminder, h.archived, h.created_at, h.updated_at],
+        )?;
+        Ok(h)
+    })
+}
+
+#[tauri::command]
+pub fn habit_update(db: DbState, habit: Habit) -> Result<Habit, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        c.execute(
+            "UPDATE habits SET name=?2, frequency=?3, reminder=?4, archived=?5, updated_at=?6 WHERE id=?1",
+            params![habit.id, habit.name, habit.frequency, habit.reminder, habit.archived, now],
+        )?;
+        Ok(Habit { updated_at: now, ..habit })
+    })
+}
+
+#[tauri::command]
+pub fn habit_delete(db: DbState, id: String) -> Result<(), String> {
+    let mut conn = db.0.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM habit_logs WHERE habit_id=?1", params![id])
+        .map_err(|e| e.to_string())?;
+    tx.execute("DELETE FROM habits WHERE id=?1", params![id])
+        .map_err(|e| e.to_string())?;
+    tx.commit().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// 打卡切换：当日已打卡则删除日志（返回 None），否则插入 value=1（返回该日志）。
+#[tauri::command]
+pub fn habit_toggle(db: DbState, id: String, date: String) -> Result<Option<HabitLog>, String> {
+    let now = now_iso();
+    let mut conn = db.0.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    let existing: Option<String> = tx
+        .query_row(
+            "SELECT id FROM habit_logs WHERE habit_id=?1 AND date=?2",
+            params![id, date],
+            |r| r.get(0),
+        )
+        .map(Some)
+        .or_else(|e| match e {
+            rusqlite::Error::QueryReturnedNoRows => Ok(None),
+            other => Err(other),
+        })
+        .map_err(|e: rusqlite::Error| e.to_string())?;
+    let result = match existing {
+        Some(log_id) => {
+            tx.execute("DELETE FROM habit_logs WHERE id=?1", params![log_id])
+                .map_err(|e| e.to_string())?;
+            None
+        }
+        None => {
+            let log = HabitLog {
+                id: Uuid::new_v4().to_string(),
+                habit_id: id,
+                date,
+                value: 1,
+            };
+            tx.execute(
+                HABIT_LOG_INSERT,
+                params![log.id, log.habit_id, log.date, log.value],
+            )
+            .map_err(|e| e.to_string())?;
+            Some(log)
+        }
+    };
+    tx.commit().map_err(|e| e.to_string())?;
+    let _ = now;
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn habit_logs(db: DbState, from: String, to: String) -> Result<Vec<HabitLog>, String> {
+    with_conn(db, move |c| query_logs_between(c, &from, &to))
+}
+
+#[tauri::command]
+pub fn settings_all(db: DbState) -> Result<HashMap<String, String>, String> {    with_conn(db, |c| {
         let rows = query_all_settings(c)?;
         Ok(rows.into_iter().map(|s| (s.key, s.value)).collect())
     })

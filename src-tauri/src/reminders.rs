@@ -125,7 +125,7 @@ mod tests {
     fn due_tasks_respects_remind_lead_time() {
         let c = mem();
         let insert = |id: &str, due: &str, remind: Option<i64>, status: &str| {
-            c.execute(TASK_INSERT, params![id, "default", id, "", status, 1, due, 100.0, None::<String>, remind, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+            c.execute(TASK_INSERT, params![id, "default", id, "", status, 1, due, 100.0, None::<String>, remind, None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         };
         // due 10:00，提前 15 分钟 → 触发时刻 09:45
         insert("lead", "2026-09-07T10:00:00", Some(15), "todo");
@@ -155,7 +155,7 @@ mod tests {
     #[test]
     fn due_tasks_one_day_lead() {
         let c = mem();
-        c.execute(TASK_INSERT, params!["d1", "default", "明天的事", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(1440), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["d1", "default", "明天的事", "", "todo", 1, "2026-09-08T10:00:00", 100.0, None::<String>, Some(1440), None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         let got = due_tasks(&c, "2026-09-07T10:00:30", 60).unwrap();
         assert_eq!(got.len(), 1, "提前1天=昨天10:00 触发");
     }
@@ -171,7 +171,7 @@ mod tests {
     #[test]
     fn due_tasks_bad_due_at_ignored() {
         let c = mem();
-        c.execute(TASK_INSERT, params!["bad", "default", "坏时间", "", "todo", 1, "not-a-date", 100.0, None::<String>, Some(5), "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
+        c.execute(TASK_INSERT, params!["bad", "default", "坏时间", "", "todo", 1, "not-a-date", 100.0, None::<String>, Some(5), None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         assert!(due_tasks(&c, "2026-09-07T10:00:00", 60).unwrap().is_empty());
     }
 }
