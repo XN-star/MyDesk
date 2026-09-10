@@ -527,6 +527,71 @@ pub fn related_notes(db: DbState, id: String) -> Result<Vec<Note>, String> {
     with_conn(db, move |c| crate::models::related_notes(c, &id))
 }
 
+/// 小组件数据：今日未完成任务（按到期升序，最多 5）、下一次提醒、最近 3 条笔记。
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WidgetData {
+    pub today_tasks: Vec<Task>,
+    pub next_reminder: Option<Task>,
+    pub recent_notes: Vec<Note>,
+}
+
+#[tauri::command]
+pub fn widget_data(db: DbState) -> Result<WidgetData, String> {
+    with_conn(db, |c| {
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let today_tasks: Vec<Task> = {
+            let mut stmt = c.prepare(
+                "SELECT id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, repeat, created_at, updated_at FROM tasks WHERE status != 'done' AND due_at IS NOT NULL AND substr(due_at, 1, 10) <= ?1 ORDER BY due_at LIMIT 5",
+            )?;
+            let rows = stmt.query_map([], task_from_row)?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let next_reminder: Option<Task> = {
+            let mut stmt = c.prepare(
+                "SELECT id, board_id, title, description, status, priority, due_at, sort_order, done_at, remind_minutes_before, repeat, created_at, updated_at FROM tasks WHERE status != 'done' AND due_at IS NOT NULL AND due_at >= ?2 AND remind_minutes_before IS NOT NULL ORDER BY due_at LIMIT 1",
+            )?;
+            let now = now_iso();
+            let mut rows = stmt.query_map(params![today, now], task_from_row)?;
+            rows.next().transpose()?
+        };
+        let recent_notes = query_all_notes(c)?;
+        Ok(WidgetData {
+            today_tasks,
+            next_reminder,
+            recent_notes: recent_notes.into_iter().take(3).collect(),
+        })
+    })
+}
+
+/// 显示小组件并定位到主屏工作区右下角。
+#[tauri::command]
+pub fn widget_show(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let win = app
+        .get_webview_window("widget")
+        .ok_or("widget 窗口不存在")?;
+    if let Some(monitor) = win.current_monitor().map_err(|e| e.to_string())? {
+        let size = win.outer_size().map_err(|e| e.to_string())?;
+        let ma = monitor.position();
+        let ms = monitor.size();
+        let scale = monitor.scale_factor();
+        let x = ma.x + ms.width as i32 - size.width as i32 - (8.0 * scale) as i32;
+        let y = ma.y + ms.height as i32 - size.height as i32 - (48.0 * scale) as i32;
+        let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+    win.show().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn widget_hide(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    let win = app
+        .get_webview_window("widget")
+        .ok_or("widget 窗口不存在")?;
+    win.hide().map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn settings_all(db: DbState) -> Result<HashMap<String, String>, String> {    with_conn(db, |c| {
         let rows = query_all_settings(c)?;

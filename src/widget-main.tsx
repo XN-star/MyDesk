@@ -1,10 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import QuickWindow from './features/quick/QuickWindow';
+import WidgetWindow from './features/widget/WidgetWindow';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <QuickWindow />
+    <WidgetWindow />
   </React.StrictMode>,
 );

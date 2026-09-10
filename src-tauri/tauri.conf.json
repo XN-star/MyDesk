@@ -32,6 +32,21 @@
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "center": true
+      },
+      {
+        "label": "widget",
+        "create": false,
+        "url": "widget.html",
+        "title": "MyDesk 小组件",
+        "width": 250,
+        "height": 430,
+        "visible": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "transparent": true,
+        "resizable": false,
+        "shadow": false
       }
     ],
     "security": {

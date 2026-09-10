@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "主窗口与快速面板的默认能力",
-  "windows": ["main", "quick"],
+  "description": "主窗口、快速面板与桌面小组件的默认能力",
+  "windows": ["main", "quick", "widget"],
   "permissions": [
     "core:default",
     "core:window:allow-hide",

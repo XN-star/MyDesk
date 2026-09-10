@@ -1,8 +1,17 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput, Habit, HabitInput, HabitLog, TimeEntry, RunningTimer, SearchHit } from '../types';
 
+export interface WidgetData {
+  todayTasks: Task[];
+  nextReminder: Task | null;
+  recentNotes: Note[];
+}
+
 export const api = {
   taskList: () => invoke<Task[]>('task_list'),
+  widgetData: () => invoke<WidgetData>('widget_data'),
+  widgetShow: () => invoke<void>('widget_show'),
+  widgetHide: () => invoke<void>('widget_hide'),
   taskCreate: (input: TaskInput) => invoke<Task>('task_create', { input }),
   taskUpdate: (task: Task) => invoke<Task>('task_update', { task }),
   taskDelete: (id: string) => invoke<void>('task_delete', { id }),

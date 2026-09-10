@@ -30,8 +30,12 @@ export default defineConfig(() => ({
       input: {
         main: resolve(import.meta.dirname ?? ".", "index.html"),
         quick: resolve(import.meta.dirname ?? ".", "quick.html"),
+        widget: resolve(import.meta.dirname ?? ".", "widget.html"),
       },
     },
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? "dev"),
   },
   test: { environment: "jsdom", globals: true },
 }));
