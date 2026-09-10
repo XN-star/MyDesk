@@ -1,6 +1,6 @@
 [package]
 name = "personal-workstation"
-version = "0.9.0"
+version = "1.0.0"
 description = "个人工作台：任务看板 + 日历日程的模块化桌面应用"
 authors = ["you"]
 edition = "2021"
