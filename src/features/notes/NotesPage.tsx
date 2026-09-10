@@ -4,6 +4,7 @@ import type { Note } from '../../types';
 import { timeShort } from '../../lib/format';
 import { api } from '../../lib/api';
 import { noteExcerpt, parseLinks, searchNotes, splitPinned } from './notes';
+import { countChars } from '../tasks/search';
 import { useNotesStore } from '../../stores/notes';
 
 export default function NotesPage() {
@@ -252,7 +253,10 @@ export default function NotesPage() {
                 </div>
               )}
             </div>
-            <div className="notes-status">{saving === 'idle' ? '已保存' : '保存中…'}</div>
+            <div className="notes-status">
+              {saving === 'idle' ? '已保存' : '保存中…'}
+              <span className="notes-chars">· {countChars(current.content)} 字</span>
+            </div>
           </>
         ) : (
           <div className="notes-empty">

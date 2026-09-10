@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { confirm, open, save } from '@tauri-apps/plugin-dialog';
 import { api } from '../../lib/api';
 import type { ThemeMode } from '../../lib/theme';
@@ -13,8 +14,35 @@ const THEME_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
 ];
 
 export default function SettingsPage() {
-  const { enabledModules, theme, setEnabled, setTheme } = useSettingsStore();
+  const { enabledModules, theme, widgetEnabled, setEnabled, setTheme, setWidgetEnabled } =
+    useSettingsStore();
   const toast = useUiStore((s) => s.toast);
+  // 番茄档位（分钟），从 settings 读取，本地编辑后保存
+  const [focusMin, setFocusMin] = useState(25);
+  const [breakMin, setBreakMin] = useState(5);
+
+  useEffect(() => {
+    api
+      .settingsAll()
+      .then((all) => {
+        setFocusMin(Number(all.pomodoroFocus) || 25);
+        setBreakMin(Number(all.pomodoroBreak) || 5);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function savePomodoro() {
+    const f = Math.min(120, Math.max(1, Math.round(focusMin) || 25));
+    const b = Math.min(60, Math.max(1, Math.round(breakMin) || 5));
+    setFocusMin(f);
+    setBreakMin(b);
+    try {
+      await api.pomodoroSet(f, b);
+      toast(`番茄档位已保存：专注 ${f} 分钟 / 休息 ${b} 分钟`);
+    } catch (e) {
+      toast(`保存失败：${e}`, 'error');
+    }
+  }
 
   async function exportBackup() {
     const path = await save({
@@ -87,6 +115,56 @@ export default function SettingsPage() {
         </div>
       </section>
       <section className="panel settings-card">
+        <h3>专注</h3>
+        <div className="settings-row">
+          <span>
+            番茄档位
+            <small>专注/休息分钟数，任务计时条 🍅 也会使用此档位</small>
+          </span>
+          <span className="pomodoro-inputs">
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={120}
+              value={focusMin}
+              onChange={(e) => setFocusMin(Number(e.target.value))}
+              style={{ width: 70 }}
+              title="专注分钟数"
+            />
+            /
+            <input
+              className="input"
+              type="number"
+              min={1}
+              max={60}
+              value={breakMin}
+              onChange={(e) => setBreakMin(Number(e.target.value))}
+              style={{ width: 70 }}
+              title="休息分钟数"
+            />
+            <button className="btn" onClick={() => void savePomodoro()}>
+              保存
+            </button>
+          </span>
+        </div>
+        <p className="muted">习惯提醒的时刻在每个习惯的编辑弹窗中单独设置。</p>
+      </section>
+      <section className="panel settings-card">
+        <h3>桌面小组件</h3>
+        <label className="settings-row">
+          <span>
+            <b>常驻小组件</b>
+            <small>桌面右下角置顶显示今日任务、下一次提醒与最近笔记</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={widgetEnabled}
+            onChange={(e) => void setWidgetEnabled(e.target.checked)}
+          />
+        </label>
+      </section>
+      <section className="panel settings-card">
         <h3>备份</h3>
         <p className="muted">数据保存在本机。导出为 JSON 文件；导入会整库替换当前数据。</p>
         <div className="settings-actions">
@@ -97,6 +175,13 @@ export default function SettingsPage() {
             导入备份…
           </button>
         </div>
+      </section>
+      <section className="panel settings-card">
+        <h3>关于</h3>
+        <p className="muted about-line">
+          MyDesk 个人工作台（PersonalWorkstation） <b>v{__APP_VERSION__}</b>
+        </p>
+        <p className="muted">本地单机 · 数据 100% 存储在本机 SQLite，无账号无云同步。</p>
       </section>
     </div>
   );

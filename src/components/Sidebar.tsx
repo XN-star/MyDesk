@@ -24,6 +24,7 @@ export default function Sidebar() {
         </button>
       ))}
       <div className="sidebar-spacer" />
+      <div className="sidebar-version">v{__APP_VERSION__}</div>
       <button
         className={`side-item${activePage === 'settings' ? ' active' : ''}`}
         title="设置"

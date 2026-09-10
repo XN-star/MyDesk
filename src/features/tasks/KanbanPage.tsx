@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -12,6 +12,7 @@ import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
 import type { Task } from '../../types';
 import { STATUSES, tasksOfBoard } from './dnd';
+import { searchTasks } from './search';
 import TaskColumn from './TaskColumn';
 
 export default function KanbanPage() {
@@ -38,7 +39,11 @@ export default function KanbanPage() {
   }, [boards, activeBoardId, setActive]);
 
   const activeBoard = boards.find((b) => b.id === activeBoardId);
-  const visible = tasksOfBoard(tasks, activeBoardId);
+  const [keyword, setKeyword] = useState('');
+  const visible = useMemo(
+    () => searchTasks(tasksOfBoard(tasks, activeBoardId), keyword),
+    [tasks, activeBoardId, keyword],
+  );
 
   function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
@@ -102,6 +107,13 @@ export default function KanbanPage() {
             </button>
           </>
         )}
+        <input
+          className="input kanban-search"
+          placeholder="搜索任务…"
+          value={keyword}
+          onChange={(e) => setKeyword(e.target.value)}
+          style={{ marginLeft: 'auto' }}
+        />
       </div>
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="kanban">

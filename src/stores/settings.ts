@@ -26,14 +26,18 @@ export function mergeNewDefaultModules(
 interface SettingsState {
   enabledModules: string[];
   theme: ThemeMode;
+  /** 桌面小组件开关（默认关） */
+  widgetEnabled: boolean;
   load: () => Promise<void>;
   setEnabled: (id: string, enabled: boolean) => Promise<void>;
   setTheme: (t: ThemeMode) => Promise<void>;
+  setWidgetEnabled: (enabled: boolean) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   enabledModules: MODULE_META.filter((m) => m.defaultEnabled).map((m) => m.id),
   theme: 'system',
+  widgetEnabled: false,
   load: async () => {
     try {
       const all = await api.settingsAll();
@@ -52,6 +56,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({
         enabledModules: result?.enabled ?? enabled,
         theme: (all.theme as ThemeMode) || 'system',
+        widgetEnabled: all.widgetEnabled === 'true',
       });
     } catch (e) {
       useUiStore.getState().toast(`加载设置失败：${e}`, 'error');
@@ -67,5 +72,16 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setTheme: async (t) => {
     set({ theme: t });
     await api.settingsSet('theme', t);
+  },
+  setWidgetEnabled: async (enabled) => {
+    set({ widgetEnabled: enabled });
+    try {
+      await api.settingsSet('widgetEnabled', String(enabled));
+      if (enabled) await api.widgetShow();
+      else await api.widgetHide();
+    } catch (e) {
+      set({ widgetEnabled: !enabled });
+      useUiStore.getState().toast(`小组件开关失败：${e}`, 'error');
+    }
   },
 }));
