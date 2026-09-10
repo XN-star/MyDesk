@@ -5,7 +5,7 @@ import { useNotesStore } from '../../stores/notes';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
 import { kindIcon } from '../links/links';
-import { frequentLinks, recentNotes, taskStats, upcomingTasks } from './overview';
+import { frequentLinks, recentNotes, taskStats, upcomingTasks, weekReport } from './overview';
 
 export default function OverviewPage() {
   const tasks = useTaskStore((s) => s.tasks);
@@ -27,6 +27,16 @@ export default function OverviewPage() {
   const upcoming = upcomingTasks(tasks, new Date());
   const notes5 = recentNotes(notes);
   const links6 = frequentLinks(links);
+  const week = weekReport(tasks, new Date());
+  const delta = (cur: number, prev: number) => {
+    const d = cur - prev;
+    if (d === 0) return <span className="ov-delta">持平</span>;
+    return (
+      <span className={`ov-delta${d > 0 ? ' up' : ' down'}`}>
+        {d > 0 ? `+${d}` : d}
+      </span>
+    );
+  };
 
   return (
     <div className="overview">
@@ -77,6 +87,20 @@ export default function OverviewPage() {
               ))}
             </ul>
           )}
+        </button>
+        <button className="panel overview-card" onClick={() => setPage('calendar')}>
+          <h3>📈 本周回顾</h3>
+          <div className="overview-stats">
+            <span>
+              <b>{week.done}</b> 完成 {delta(week.done, week.donePrev)}
+            </span>
+            <span>
+              <b>{week.created}</b> 新建 {delta(week.created, week.createdPrev)}
+            </span>
+            <span>
+              <b>{week.overdue}</b> 逾期 {delta(week.overdue, week.overduePrev)}
+            </span>
+          </div>
         </button>
       </div>
       <div className="panel overview-card overview-links">
