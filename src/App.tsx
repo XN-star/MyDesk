@@ -11,6 +11,7 @@ import SettingsPage from './features/settings/SettingsPage';
 import { enabledModules } from './modules/registry';
 import { applyTheme } from './lib/theme';
 import { useBoardsStore } from './stores/boards';
+import { useNotesStore } from './stores/notes';
 import { useSettingsStore } from './stores/settings';
 import { useTaskStore } from './stores/tasks';
 import { useUiStore } from './stores/ui';
@@ -45,11 +46,15 @@ export default function App() {
     const un1 = listen('quick://changed', () => {
       useTaskStore.getState().load();
     });
-    const un2 = listen<{ type: 'task' | 'event'; id: string }>('quick://open', async (e) => {
+    const un2 = listen<{ type: 'task' | 'note' | 'event'; id: string }>('quick://open', async (e) => {
       const w = getCurrentWindow();
       await w.show();
       await w.setFocus();
       if (e.payload.type === 'task') useUiStore.getState().openTask(e.payload.id);
+      else if (e.payload.type === 'note') {
+        useUiStore.getState().setPage('notes');
+        await useNotesStore.getState().select(e.payload.id);
+      }
     });
     const un3 = listen('app://close-requested', () => {
       setShowExit(true);

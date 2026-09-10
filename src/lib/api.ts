@@ -1,11 +1,13 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput, Habit, HabitInput, HabitLog, TimeEntry, RunningTimer } from '../types';
+import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput, Habit, HabitInput, HabitLog, TimeEntry, RunningTimer, SearchHit } from '../types';
 
 export const api = {
   taskList: () => invoke<Task[]>('task_list'),
   taskCreate: (input: TaskInput) => invoke<Task>('task_create', { input }),
   taskUpdate: (task: Task) => invoke<Task>('task_update', { task }),
   taskDelete: (id: string) => invoke<void>('task_delete', { id }),
+  globalSearch: (query: string) => invoke<SearchHit[]>('global_search', { query }),
+  relatedNotes: (id: string) => invoke<Note[]>('related_notes', { id }),
   timerStart: (taskId: string) => invoke<TimeEntry>('timer_start', { taskId }),
   timerStop: () => invoke<TimeEntry | null>('timer_stop'),
   timerStatus: () => invoke<RunningTimer | null>('timer_status'),

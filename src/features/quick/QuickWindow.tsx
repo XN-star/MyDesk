@@ -1,21 +1,28 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type React from 'react';
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { api } from '../../lib/api';
-import type { Link, Task } from '../../types';
+import type { Link, SearchHit, Task } from '../../types';
 import { entryMode } from '../links/quickEntry';
 import { kindIcon } from '../links/links';
 import { parseQuickTask } from './parseQuickTask';
 
 interface Hit {
-  type: 'task' | 'link';
+  type: 'task' | 'link' | 'note';
   id: string;
   label: string;
+  sub?: string;
   link?: Link;
 }
 
-function search(q: string, tasks: Task[]): Hit[] {
+const KIND_TAG: Record<SearchHit['kind'], string> = {
+  task: '任务',
+  note: '笔记',
+  link: '入口',
+};
+
+function localTaskHits(q: string, tasks: Task[]): Hit[] {
   const s = q.trim().toLowerCase();
   if (!s) return [];
   return tasks
@@ -24,19 +31,54 @@ function search(q: string, tasks: Task[]): Hit[] {
     .slice(0, 8);
 }
 
+/** FTS 命中转展示项；任务类去重（本地命中优先，避免同任务重复出现）。 */
+function mergeHits(local: Hit[], fts: SearchHit[]): Hit[] {
+  const seenTask = new Set(local.filter((h) => h.type === 'task').map((h) => h.id));
+  const ftsHits: Hit[] = fts
+    .filter((h) => !(h.kind === 'task' && seenTask.has(h.refId)))
+    .map((h) => ({
+      type: h.kind as Hit['type'],
+      id: h.refId,
+      label: h.title || '（无标题）',
+      sub: h.body ? h.body.slice(0, 30) : undefined,
+    }));
+  return [...local, ...ftsHits].slice(0, 12);
+}
+
 export default function QuickWindow() {
   const [q, setQ] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [links, setLinks] = useState<Link[]>([]);
   const [sel, setSel] = useState(0);
   const [notice, setNotice] = useState('');
+  const [ftsHits, setFtsHits] = useState<SearchHit[]>([]);
+  const composeRef = useRef(false);
+  const ftsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     api.taskList().then(setTasks).catch(() => {});
     api.linkList().then(setLinks).catch(() => {});
   }, []);
 
+  // FTS 全局搜索：200ms 防抖；输入法组合中不发
+  useEffect(() => {
+    if (ftsTimer.current) clearTimeout(ftsTimer.current);
+    const query = q.trim();
+    if (!query || query.startsWith(' ') || query.startsWith('/')) {
+      setFtsHits([]);
+      return;
+    }
+    ftsTimer.current = setTimeout(() => {
+      if (composeRef.current) return;
+      api.globalSearch(query).then(setFtsHits).catch(() => setFtsHits([]));
+    }, 200);
+    return () => {
+      if (ftsTimer.current) clearTimeout(ftsTimer.current);
+    };
+  }, [q]);
+
   const entry = useMemo(() => entryMode(links, q), [links, q]);
+  const local = useMemo(() => localTaskHits(q, tasks), [q, tasks]);
   const hits: Hit[] = useMemo(() => {
     if (entry) {
       return entry.list.map((l, i) => ({
@@ -46,8 +88,8 @@ export default function QuickWindow() {
         link: l,
       }));
     }
-    return search(q, tasks);
-  }, [entry, q, tasks]);
+    return mergeHits(local, ftsHits);
+  }, [entry, local, ftsHits]);
   const selIndex = Math.min(sel, Math.max(hits.length - 1, 0));
 
   async function hide() {
@@ -55,13 +97,11 @@ export default function QuickWindow() {
     setQ('');
     setSel(0);
     setNotice('');
+    setFtsHits([]);
   }
 
   async function openHit(hit: Hit) {
-    if (hit.type === 'task') {
-      await emit('quick://open', { type: hit.type, id: hit.id });
-      await hide();
-    } else if (hit.link) {
+    if (hit.type === 'link' && hit.link) {
       try {
         if (hit.link.kind === 'command') await api.linkRun(hit.link.id);
         else await api.linkOpen(hit.link.kind, hit.link.target);
@@ -70,7 +110,10 @@ export default function QuickWindow() {
         return;
       }
       await hide();
+      return;
     }
+    await emit('quick://open', { type: hit.type, id: hit.id });
+    await hide();
   }
 
   async function createTask() {
@@ -104,7 +147,7 @@ export default function QuickWindow() {
       if (entry) {
         const hit = hits[selIndex];
         if (hit) await openHit(hit);
-      } else if (hits[sel]) await openHit(hits[sel]);
+      } else if (hits[selIndex]) await openHit(hits[selIndex]);
       else await createTask();
     }
   }
@@ -113,7 +156,10 @@ export default function QuickWindow() {
     ? entry.query === ''
       ? '入口模式：回车打开选中，输入 1-9 切换'
       : '入口过滤：回车打开选中'
-    : '搜索或输入任务（明天 15:00 / 每天 9:00 / #标签 / 空格=入口）';
+    : '搜索任务/笔记/入口，或输入任务（每天 9:00 / #标签 / 空格=入口）';
+
+  const showCreateHint =
+    !entry && hits.length === 0 && q.trim() !== '' && !notice && parseQuickTask(q).title !== '';
 
   return (
     <div className="quick">
@@ -126,22 +172,29 @@ export default function QuickWindow() {
           setQ(e.target.value);
           setSel(0);
         }}
+        onCompositionStart={() => {
+          composeRef.current = true;
+        }}
+        onCompositionEnd={() => {
+          composeRef.current = false;
+        }}
         onKeyDown={onKeyDown}
       />
       <div className="quick-results">
         {hits.map((h, i) => (
           <div
             key={`${h.type}-${h.id}`}
-            className={`quick-item${(entry ? i === selIndex : i === sel) ? ' active' : ''}`}
+            className={`quick-item${(entry ? i === selIndex : i === selIndex) ? ' active' : ''}`}
             onClick={() => void openHit(h)}
           >
-            <span className="quick-tag">{h.type === 'task' ? '任务' : '入口'}</span>
-            {h.label}
+            <span className="quick-tag">{KIND_TAG[h.type] ?? '任务'}</span>
+            <span className="quick-item-label">
+              {h.label}
+              {h.sub && <span className="quick-item-sub">{h.sub}</span>}
+            </span>
           </div>
         ))}
-        {!entry && hits.length === 0 && q.trim() !== '' && !notice && (
-          <div className="quick-hint">回车创建任务：{parseQuickTask(q).title}</div>
-        )}
+        {showCreateHint && <div className="quick-hint">回车创建任务：{parseQuickTask(q).title}</div>}
         {notice && <div className="quick-hint">{notice}</div>}
       </div>
     </div>

@@ -110,3 +110,12 @@ export interface RunningTimer {
   taskTitle: string;
   elapsedSec: number;
 }
+
+export type SearchKind = 'task' | 'note' | 'link';
+
+export interface SearchHit {
+  kind: SearchKind;
+  refId: string;
+  title: string;
+  body: string;
+}
