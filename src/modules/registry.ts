@@ -1,57 +1,44 @@
-import type { Module } from './types';
+import { MODULE_META } from './meta';
+import type { ComponentType } from 'react';
 import KanbanPage from '../features/tasks/KanbanPage';
 import CalendarPage from '../features/calendar/CalendarPage';
 import NotesPage from '../features/notes/NotesPage';
 import LinksPage from '../features/links/LinksPage';
 import OverviewPage from '../features/overview/OverviewPage';
 
-export const MODULES: Module[] = [
-  {
-    id: 'overview',
-    name: '概览',
-    icon: '◈',
-    description: '今日信息一览',
-    defaultEnabled: true,
-    route: '/overview',
-    component: OverviewPage,
-  },
-  {
-    id: 'tasks',
-    name: '任务看板',
-    icon: '▦',
-    description: '三列拖拽任务管理',
-    defaultEnabled: true,
-    route: '/tasks',
-    component: KanbanPage,
-  },
-  {
-    id: 'calendar',
-    name: '日历',
-    icon: '▤',
-    description: '月历与当日日程',
-    defaultEnabled: true,
-    route: '/calendar',
-    component: CalendarPage,
-  },
-  {
-    id: 'notes',
-    name: '笔记',
-    icon: '✎',
-    description: '纯文本快速记录',
-    defaultEnabled: true,
-    route: '/notes',
-    component: NotesPage,
-  },
-  {
-    id: 'links',
-    name: '快捷入口',
-    icon: '⚡',
-    description: '网址/文件/命令快速启动',
-    defaultEnabled: true,
-    route: '/links',
-    component: LinksPage,
-  },
-];
+/** 完整模块 = 静态元数据 + 组件/路由。 */
+export interface Module {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+  defaultEnabled: boolean;
+  route: string;
+  component: ComponentType;
+}
+
+const ROUTES: Record<string, string> = {
+  overview: '/overview',
+  tasks: '/tasks',
+  calendar: '/calendar',
+  notes: '/notes',
+  links: '/links',
+};
+
+const COMPONENTS: Record<string, ComponentType> = {
+  overview: OverviewPage,
+  tasks: KanbanPage,
+  calendar: CalendarPage,
+  notes: NotesPage,
+  links: LinksPage,
+};
+
+/** 注册表 = 静态元数据（meta.ts，供 store 等非 UI 层引用）+ 组件/路由挂载。 */
+export const MODULES: Module[] = MODULE_META.map((m) => ({
+  ...m,
+  route: ROUTES[m.id],
+  component: COMPONENTS[m.id],
+}));
 
 export function enabledModules(enabledIds: string[]): Module[] {
   return MODULES.filter((m) => enabledIds.includes(m.id));

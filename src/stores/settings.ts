@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
 import type { ThemeMode } from '../lib/theme';
-import { MODULES } from '../modules/registry';
+import { MODULE_META } from '../modules/meta';
 import { useUiStore } from './ui';
 
 /** v0.1 出厂默认模块。老用户升级时以此区分「新模块」与「旧默认」，避免覆盖用户禁用选择。 */
@@ -32,7 +32,7 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
-  enabledModules: MODULES.filter((m) => m.defaultEnabled).map((m) => m.id),
+  enabledModules: MODULE_META.filter((m) => m.defaultEnabled).map((m) => m.id),
   theme: 'system',
   load: async () => {
     try {
@@ -44,7 +44,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         ? (JSON.parse(all.mergedDefaultModules) as string[])
         : LEGACY_DEFAULT_MODULES;
       const enabled = stored ?? get().enabledModules;
-      const result = mergeNewDefaultModules(enabled, merged, MODULES);
+      const result = mergeNewDefaultModules(enabled, merged, MODULE_META);
       if (result) {
         await api.settingsSet('enabledModules', JSON.stringify(result.enabled));
         await api.settingsSet('mergedDefaultModules', JSON.stringify(result.merged));
