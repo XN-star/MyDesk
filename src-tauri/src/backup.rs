@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-pub const VERSION: i64 = 8;
+pub const VERSION: i64 = 9;
 
 pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let tasks = query_all_tasks(conn)?;
@@ -85,6 +85,8 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
         Some(v) => serde_json::from_value(v.clone()).context("timeEntries 字段格式错误")?,
         None => Vec::new(),
     };
+    // v9 起备份不含 FTS 索引（虚拟表不导出），导入后全量重建。
+    let _search_rebuild_hint = doc.get("searchIndex").is_none();
 
     // v1 备份中的日程转换为任务（due_at = date + time_start，缺省 09:00）。
     let mut converted: Vec<Task> = Vec::new();
@@ -214,6 +216,14 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     for s in &settings {
         tx.execute(SETTING_INSERT, params![s.key, s.value])?;
     }
+    // 重建 FTS 全局搜索索引（触发器在建表时已由迁移创建；事务内 INSERT 会触发同步，
+    // 但为规避事务内触发器 delete 副作用，先清空后显式回填）。
+    tx.execute_batch(
+        "DELETE FROM search_index;
+         INSERT INTO search_index(kind, ref_id, title, body) SELECT 'task', id, cjk_space(title), cjk_space(description) FROM tasks;
+         INSERT INTO search_index(kind, ref_id, title, body) SELECT 'note', id, cjk_space(title), cjk_space(content) FROM notes;
+         INSERT INTO search_index(kind, ref_id, title, body) SELECT 'link', id, cjk_space(title), cjk_space(target) FROM links;",
+    )?;
     tx.commit()?;
     Ok(tasks.len()
         + converted.len()
@@ -256,7 +266,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 8);
+        assert_eq!(doc["version"], 9);
         std::fs::remove_file(&file).ok();
     }
 
@@ -280,7 +290,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 8);
+        assert_eq!(doc["version"], 9);
         std::fs::remove_file(&file).ok();
     }
 
@@ -332,7 +342,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 8);
+        assert_eq!(doc["version"], 9);
         std::fs::remove_file(&file).ok();
     }
 
@@ -384,7 +394,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 8);
+        assert_eq!(doc["version"], 9);
         std::fs::remove_file(&file).ok();
     }
 
@@ -512,7 +522,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 8);
+        assert_eq!(doc["version"], 9);
         std::fs::remove_file(&file).ok();
     }
 
@@ -578,7 +588,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 8);
+        assert_eq!(doc["version"], 9);
         std::fs::remove_file(&file).ok();
     }
 
@@ -609,6 +619,28 @@ mod tests {
             0,
             "旧备份无 timeEntries，整库替换后为空"
         );
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_rebuilds_search_index() {
+        let src = mem();
+        src.execute(NOTE_INSERT, params!["n1", "独特关键词笔记", "正文", 0, "2026-09-10T10:00:00", "2026-09-10T10:00:00"]).unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-fts-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+
+        // 导出内容不含 FTS 数据（虚拟表不导出）
+        let text = std::fs::read_to_string(&file).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["version"], 9);
+        assert!(doc.get("searchIndex").is_none(), "FTS 索引不导出");
+
+        // 导入后全局搜索仍可用（索引重建）
+        let mut dst = mem();
+        import(&mut dst, &file).unwrap();
+        let hits = crate::models::global_search(&dst, "独特关键词").unwrap();
+        assert_eq!(hits.len(), 1, "导入后索引重建可命中");
+        assert_eq!(hits[0].kind, "note");
         std::fs::remove_file(&file).ok();
     }
 }
