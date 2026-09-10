@@ -2,16 +2,19 @@
 // 用法：node scripts/rename-dist.mjs（在 npm run dist 中于 tauri build 之后自动执行）。
 import { copyFileSync, existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const version = require('../package.json').version;
 
-const bundleDir = new URL('../src-tauri/target/release/bundle/nsis/', import.meta.url);
-const outDir = new URL('../', import.meta.url);
+const here = dirname(fileURLToPath(import.meta.url)); // scripts/
+const repoRoot = resolve(here, '..');
+const bundleDir = resolve(repoRoot, 'src-tauri/target/release/bundle/nsis');
+const outPath = join(repoRoot, `MyDesk-v${version}-setup.exe`);
 
 if (!existsSync(bundleDir)) {
-  console.error(`未找到安装包目录：${bundleDir.pathname}`);
+  console.error(`未找到安装包目录：${bundleDir}`);
   process.exit(1);
 }
 
@@ -20,7 +23,12 @@ if (setups.length === 0) {
   console.error('未找到 *-setup.exe 安装包');
   process.exit(1);
 }
+// 目录中可能残留历史版本安装包，精确匹配当前版本
+const current = setups.find((f) => f.includes(`_${version}_`));
+if (!current) {
+  console.error(`未找到版本 ${version} 的安装包，现有：${setups.join(', ')}`);
+  process.exit(1);
+}
 
-const target = `MyDesk-v${version}-setup.exe`;
-copyFileSync(join(bundleDir.pathname, setups[0]), new URL(target, outDir).pathname);
-console.log(`已复制 ${setups[0]} → ${target}`);
+copyFileSync(join(bundleDir, current), outPath);
+console.log(`已复制 ${current} → ${outPath}`);
