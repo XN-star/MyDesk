@@ -195,6 +195,16 @@ pub struct RunningTimer {
     pub elapsed_sec: i64,
 }
 
+/// 全局搜索命中：kind='task'|'note'|'link'，ref_id 为对应表主键。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchHit {
+    pub kind: String,
+    pub ref_id: String,
+    pub title: String,
+    pub body: String,
+}
+
 pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
     Ok(Task {
         id: r.get(0)?,
@@ -357,6 +367,55 @@ pub fn query_entries_between(
         "SELECT {TIME_ENTRY_COLS} FROM time_entries WHERE started_at >= ?1 AND started_at < ?2 ORDER BY started_at"
     ))?;
     let rows = stmt.query_map(params![from, to], time_entry_from_row)?;
+    rows.collect()
+}
+
+/// 全局搜索（FTS5）。查询整体包裹为前缀短语 `"{q}"*`，用户输入的引号剥除，
+/// 避免 AND/OR/NOT 等运算符语法报错。查询文本经 cjk_space 变换与索引侧一致。
+pub fn global_search(c: &Connection, query: &str) -> rusqlite::Result<Vec<SearchHit>> {
+    let cleaned: String = query.chars().filter(|ch| *ch != '"').collect();
+    let q = cleaned.trim();
+    if q.is_empty() {
+        return Ok(Vec::new());
+    }
+    let transformed: String = c
+        .query_row("SELECT cjk_space(?1)", params![q], |r| r.get(0))
+        .unwrap_or_else(|_| q.to_string());
+    let match_expr = format!("\"{}\"*", transformed.replace('\'', "''"));
+    let mut stmt = c.prepare(
+        "SELECT kind, ref_id, title, body FROM search_index WHERE search_index MATCH ?1 LIMIT 36",
+    )?;
+    let rows = stmt.query_map(params![match_expr], |r| {
+        Ok(SearchHit {
+            kind: r.get(0)?,
+            ref_id: r.get(1)?,
+            title: r.get(2)?,
+            body: r.get(3)?,
+        })
+    })?;
+    let mut hits: Vec<SearchHit> = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    // 稳定分类顺序：task → note → link
+    hits.sort_by_key(|h| match h.kind.as_str() {
+        "task" => 0,
+        "note" => 1,
+        _ => 2,
+    });
+    Ok(hits)
+}
+
+/// 笔记反链：正文含 `[[目标标题]]` 的其他笔记，按更新时间倒序。
+pub fn related_notes(c: &Connection, id: &str) -> rusqlite::Result<Vec<Note>> {
+    let title: String = c
+        .query_row("SELECT title FROM notes WHERE id=?1", params![id], |r| r.get(0))
+        .map_err(|_| rusqlite::Error::InvalidParameterName("笔记不存在".into()))?;
+    if title.is_empty() {
+        return Ok(Vec::new());
+    }
+    let pattern = format!("%[[{}]]%", title.replace('%', "\\%").replace('_', "\\_"));
+    let mut stmt = c.prepare(&format!(
+        "SELECT {NOTE_COLS} FROM notes WHERE id != ?1 AND content LIKE ?2 ESCAPE '\\' ORDER BY updated_at DESC LIMIT 20"
+    ))?;
+    let rows = stmt.query_map(params![id, pattern], note_from_row)?;
     rows.collect()
 }
 

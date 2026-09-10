@@ -140,7 +140,162 @@ CREATE TABLE IF NOT EXISTS habit_logs (
 CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs (habit_id, date);
 ";
 
-/// v8 建表语句（新库直接为此形态）：v7 全部 + time_entries。
+/// v9 建表语句（新库直接为此形态）：v8 全部 + FTS5 全局搜索索引与同步触发器。
+pub const SCHEMA_V9: &str = "
+CREATE TABLE IF NOT EXISTS tasks (
+  id          TEXT PRIMARY KEY,
+  board_id    TEXT NOT NULL DEFAULT 'default',
+  title       TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status      TEXT NOT NULL DEFAULT 'todo',
+  priority    INTEGER NOT NULL DEFAULT 1,
+  due_at      TEXT,
+  sort_order  REAL NOT NULL,
+  done_at     TEXT,
+  remind_minutes_before INTEGER,
+  repeat      TEXT,
+  created_at  TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS notes (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  content    TEXT NOT NULL DEFAULT '',
+  pinned     INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS links (
+  id         TEXT PRIMARY KEY,
+  title      TEXT NOT NULL DEFAULT '',
+  kind       TEXT NOT NULL DEFAULT 'url',
+  target     TEXT NOT NULL,
+  sort_order REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS boards (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habits (
+  id         TEXT PRIMARY KEY,
+  name       TEXT NOT NULL,
+  frequency  TEXT NOT NULL DEFAULT 'daily',
+  reminder   TEXT,
+  archived   INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS habit_logs (
+  id       TEXT PRIMARY KEY,
+  habit_id TEXT NOT NULL,
+  date     TEXT NOT NULL,
+  value    INTEGER NOT NULL DEFAULT 1,
+  UNIQUE(habit_id, date)
+);
+CREATE INDEX IF NOT EXISTS idx_habit_logs_habit ON habit_logs (habit_id, date);
+CREATE TABLE IF NOT EXISTS time_entries (
+  id         TEXT PRIMARY KEY,
+  task_id    TEXT NOT NULL,
+  started_at TEXT NOT NULL,
+  ended_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_time_entries_task ON time_entries (task_id, started_at);
+CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+  kind,
+  ref_id,
+  title,
+  body,
+  tokenize = 'unicode61'
+);
+CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('task', new.id, cjk_space(new.title), cjk_space(new.description));
+END;
+CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'task', old.id, old.title, old.description);
+END;
+CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'task', old.id, old.title, old.description);
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('task', new.id, cjk_space(new.title), cjk_space(new.description));
+END;
+CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('note', new.id, cjk_space(new.title), cjk_space(new.content));
+END;
+CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'note', old.id, old.title, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'note', old.id, old.title, old.content);
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('note', new.id, cjk_space(new.title), cjk_space(new.content));
+END;
+CREATE TRIGGER IF NOT EXISTS links_ai AFTER INSERT ON links BEGIN
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('link', new.id, cjk_space(new.title), cjk_space(new.target));
+END;
+CREATE TRIGGER IF NOT EXISTS links_ad AFTER DELETE ON links BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'link', old.id, old.title, old.target);
+END;
+CREATE TRIGGER IF NOT EXISTS links_au AFTER UPDATE ON links BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'link', old.id, old.title, old.target);
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('link', new.id, cjk_space(new.title), cjk_space(new.target));
+END;
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+";
+
+/// v8→v9：FTS 索引 + 触发器 + 存量数据回填。
+pub const MIGRATE_V9: &str = "
+CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
+  kind,
+  ref_id,
+  title,
+  body,
+  tokenize = 'unicode61'
+);
+INSERT INTO search_index(kind, ref_id, title, body) SELECT 'task', id, cjk_space(title), cjk_space(description) FROM tasks;
+INSERT INTO search_index(kind, ref_id, title, body) SELECT 'note', id, cjk_space(title), cjk_space(content) FROM notes;
+INSERT INTO search_index(kind, ref_id, title, body) SELECT 'link', id, cjk_space(title), cjk_space(target) FROM links;
+";
+
+/// 触发器定义（v8→v9 与备份导入重建共用；CREATE TRIGGER IF NOT EXISTS 幂等）。
+pub const SEARCH_TRIGGERS: &str = "
+CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('task', new.id, cjk_space(new.title), cjk_space(new.description));
+END;
+CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'task', old.id, old.title, old.description);
+END;
+CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'task', old.id, old.title, old.description);
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('task', new.id, cjk_space(new.title), cjk_space(new.description));
+END;
+CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('note', new.id, cjk_space(new.title), cjk_space(new.content));
+END;
+CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'note', old.id, old.title, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'note', old.id, old.title, old.content);
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('note', new.id, cjk_space(new.title), cjk_space(new.content));
+END;
+CREATE TRIGGER IF NOT EXISTS links_ai AFTER INSERT ON links BEGIN
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('link', new.id, cjk_space(new.title), cjk_space(new.target));
+END;
+CREATE TRIGGER IF NOT EXISTS links_ad AFTER DELETE ON links BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'link', old.id, old.title, old.target);
+END;
+CREATE TRIGGER IF NOT EXISTS links_au AFTER UPDATE ON links BEGIN
+  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'link', old.id, old.title, old.target);
+  INSERT INTO search_index(kind, ref_id, title, body) VALUES('link', new.id, cjk_space(new.title), cjk_space(new.target));
+END;
+";
+
+/// v8 建表语句，仅用于迁移测试中构造 v8 库。
 pub const SCHEMA_V8: &str = "
 CREATE TABLE IF NOT EXISTS tasks (
   id          TEXT PRIMARY KEY,
@@ -459,10 +614,11 @@ pub fn open(path: &std::path::Path) -> Result<Connection, Box<dyn std::error::Er
 }
 
 pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
+    register_cjk_space(conn)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
-        // 全新库：直接建 v8 形态。
+        // 全新库：直接建 v9 形态。
         // version==0 且已存在 events/tasks 表的极端情况（手动建的 v1/v2 库）按旧版处理。
         let has_events: bool = table_exists(conn, "events")?;
         let has_tasks: bool = table_exists(conn, "tasks")?;
@@ -474,9 +630,9 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             conn.execute_batch(SCHEMA_V2)?;
             upgrade_to_v3(conn)?;
         } else {
-            conn.execute_batch(SCHEMA_V8)?;
+            conn.execute_batch(SCHEMA_V9)?;
             seed_default_board(conn)?;
-            conn.pragma_update(None, "user_version", 8)?;
+            conn.pragma_update(None, "user_version", 9)?;
             return Ok(());
         }
     } else if version == 1 {
@@ -490,7 +646,8 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     upgrade_to_v6(conn)?;
     upgrade_to_v7(conn)?;
     upgrade_to_v8(conn)?;
-    conn.pragma_update(None, "user_version", 8)?;
+    upgrade_to_v9(conn)?;
+    conn.pragma_update(None, "user_version", 9)?;
     Ok(())
 }
 
@@ -543,6 +700,49 @@ fn upgrade_to_v8(conn: &Connection) -> rusqlite::Result<()> {
     Ok(())
 }
 
+fn upgrade_to_v9(conn: &Connection) -> rusqlite::Result<()> {
+    if !table_exists(conn, "search_index")? {
+        conn.execute_batch(MIGRATE_V9)?;
+        conn.execute_batch(SEARCH_TRIGGERS)?;
+    }
+    Ok(())
+}
+
+/// 注册 cjk_space 标量函数：连续 CJK 字符间插入空格。
+/// FTS5 unicode61 不切分中文（整句成一条 token），索引与查询两侧都经此变换，
+/// 实现「按字子串匹配」——搜「预算」能命中「讨论了预算」。
+pub fn register_cjk_space(conn: &Connection) -> rusqlite::Result<()> {
+    conn.create_scalar_function(
+        "cjk_space",
+        1,
+        rusqlite::functions::FunctionFlags::SQLITE_UTF8 | rusqlite::functions::FunctionFlags::SQLITE_DETERMINISTIC,
+        |ctx| {
+            let text: String = ctx.get(0)?;
+            let mut out = String::with_capacity(text.len() * 2);
+            let mut prev_cjk = false;
+            for ch in text.chars() {
+                let is_cjk = is_cjk_char(ch);
+                if is_cjk && prev_cjk {
+                    out.push(' ');
+                }
+                out.push(ch);
+                prev_cjk = is_cjk;
+            }
+            Ok(out)
+        },
+    )
+}
+
+fn is_cjk_char(c: char) -> bool {
+    matches!(c as u32,
+        0x4E00..=0x9FFF    // CJK 基本区
+        | 0x3400..=0x4DBF  // 扩展 A
+        | 0x3040..=0x30FF  // 平假名/片假名
+        | 0xAC00..=0xD7AF  // 谚文
+        | 0xF900..=0xFAFF  // 兼容表意
+    )
+}
+
 fn upgrade_to_v3(conn: &Connection) -> rusqlite::Result<()> {
     if !column_exists(conn, "tasks", "remind_minutes_before")? {
         conn.execute_batch(MIGRATE_V2_TO_V3)?;
@@ -585,6 +785,7 @@ fn migrate_v1_to_v2(conn: &Connection) -> rusqlite::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusqlite::params;
 
     fn mem() -> rusqlite::Connection {
         let conn = rusqlite::Connection::open_in_memory().unwrap();
@@ -604,7 +805,7 @@ mod tests {
             .unwrap();
         assert_eq!(n, 5);
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         assert!(column_exists(&c, "tasks", "remind_minutes_before").unwrap());
         assert!(column_exists(&c, "notes", "pinned").unwrap());
         assert!(column_exists(&c, "links", "target").unwrap());
@@ -631,7 +832,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         let events: i64 = c
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
@@ -661,7 +862,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -686,7 +887,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -713,7 +914,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
@@ -739,7 +940,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         let name: String = c
             .query_row("SELECT name FROM boards WHERE id='default'", [], |r| r.get(0))
             .unwrap();
@@ -778,7 +979,7 @@ mod tests {
             .unwrap();
         assert_eq!(n, 8);
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         assert!(column_exists(&c, "time_entries", "task_id").unwrap());
         assert!(column_exists(&c, "time_entries", "ended_at").unwrap());
     }
@@ -802,7 +1003,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
@@ -813,6 +1014,54 @@ mod tests {
         );
         assert!(table_exists(&c, "time_entries").unwrap());
     }
+
+    #[test]
+    fn fresh_db_creates_fts_at_v9() {
+        let c = mem();
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 9);
+        assert!(table_exists(&c, "search_index").unwrap());
+        let n: i64 = c
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='trigger' AND name IN ('tasks_ai','tasks_ad','tasks_au','notes_ai','notes_ad','notes_au','links_ai','links_ad','links_au')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 9, "三表各三个触发器");
+    }
+
+    #[test]
+    fn v8_db_upgrades_to_v9_backfills_search_index() {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        c.execute_batch(SCHEMA_V8).unwrap();
+        c.execute_batch("PRAGMA user_version = 8;").unwrap();
+        c.execute(TASK_INSERT_MIN, params!["t1", "预算讨论", ""]).unwrap();
+        c.execute(
+            "INSERT INTO notes (id, title, content, pinned, created_at, updated_at) VALUES ('n1', '会议记录', '讨论了预算', 0, '2026-09-10T10:00:00', '2026-09-10T10:00:00')",
+            [],
+        )
+        .unwrap();
+        c.execute(
+            "INSERT INTO links (id, title, kind, target, sort_order, created_at, updated_at) VALUES ('l1', 'Gmail', 'url', 'https://mail.google.com', 100.0, '2026-09-10T10:00:00', '2026-09-10T10:00:00')",
+            [],
+        )
+        .unwrap();
+
+        migrate(&c).unwrap();
+
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 9);
+        // 回填后可命中存量数据（CJK 按字索引，"预算"二字连续即命中）
+        let hits = crate::models::global_search(&c, "预算").unwrap();
+        assert_eq!(hits.len(), 2, "任务与笔记均命中");
+        let link_hits = crate::models::global_search(&c, "gmail").unwrap();
+        assert_eq!(link_hits.len(), 1);
+        assert_eq!(link_hits[0].kind, "link");
+    }
+
+    // v8 测试库用最小任务插入（SCHEMA_V8 无 repeat 之后的差异通过显式列规避）
+    const TASK_INSERT_MIN: &str = "INSERT INTO tasks (id, title, description, board_id, status, priority, sort_order, created_at, updated_at) VALUES (?1, ?2, ?3, 'default', 'todo', 1, 100.0, '2026-09-10T10:00:00', '2026-09-10T10:00:00')";
 
     #[test]
     fn v6_db_upgrades_to_v7_keeps_data() {
@@ -833,7 +1082,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 8);
+        assert_eq!(v, 9);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
