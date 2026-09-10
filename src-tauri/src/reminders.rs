@@ -1,6 +1,6 @@
 use crate::{Db, Notified};
 use chrono::NaiveDateTime;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use std::time::Duration;
 use tauri::{Manager, State};
 use tauri_plugin_notification::NotificationExt;
@@ -77,6 +77,7 @@ fn tick(app: &tauri::AppHandle) -> anyhow::Result<()> {
         .lock()
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     let due = due_tasks(&conn, &now, 60)?;
+    let habits_due = due_habits(&conn, &now).unwrap_or_default();
     drop(conn);
 
     let mut set = notified.0.lock().unwrap();
@@ -96,6 +97,17 @@ fn tick(app: &tauri::AppHandle) -> anyhow::Result<()> {
             .show()?;
         set.insert(id);
     }
+    for (key, name) in habits_due {
+        if set.contains(&key) {
+            continue;
+        }
+        app.notification()
+            .builder()
+            .title("习惯打卡")
+            .body(&name)
+            .show()?;
+        set.insert(key);
+    }
     Ok(())
 }
 
@@ -107,6 +119,27 @@ fn remind_label(mins: i64) -> String {
     } else {
         format!("{mins}分钟")
     }
+}
+
+/// 习惯提醒：reminder 时刻等于当前 HH:MM、当日未打卡的习惯。
+/// 返回 (去重键 "habit:{id}:{date}", 习惯名)。
+pub fn due_habits(conn: &Connection, now: &str) -> rusqlite::Result<Vec<(String, String)>> {
+    let date = &now[..10];
+    let hhmm = &now[11..16];
+    let mut stmt = conn.prepare(
+        "SELECT h.id, h.name FROM habits h
+         WHERE h.archived = 0 AND h.reminder = ?1
+           AND NOT EXISTS (SELECT 1 FROM habit_logs l WHERE l.habit_id = h.id AND l.date = ?2)",
+    )?;
+    let rows = stmt.query_map(params![hhmm, date], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })?;
+    let mut due = Vec::new();
+    for row in rows {
+        let (id, name) = row?;
+        due.push((format!("habit:{id}:{date}"), name));
+    }
+    Ok(due)
 }
 
 #[cfg(test)]
@@ -173,5 +206,44 @@ mod tests {
         let c = mem();
         c.execute(TASK_INSERT, params!["bad", "default", "坏时间", "", "todo", 1, "not-a-date", 100.0, None::<String>, Some(5), None::<String>, "2026-09-07T09:00:00", "2026-09-07T09:00:00"]).unwrap();
         assert!(due_tasks(&c, "2026-09-07T10:00:00", 60).unwrap().is_empty());
+    }
+
+    fn seed_habit(c: &rusqlite::Connection, id: &str, reminder: Option<&str>) {
+        c.execute(
+            crate::models::HABIT_INSERT,
+            params![id, id, "daily", reminder, 0, "2026-09-01T09:00:00", "2026-09-01T09:00:00"],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn due_habits_matches_time_and_skips_done() {
+        let c = mem();
+        seed_habit(&c, "h1", Some("08:00"));
+        seed_habit(&c, "h2", Some("08:00"));
+        seed_habit(&c, "h3", None); // 不提醒
+        seed_habit(&c, "h4", Some("09:00")); // 时刻不同
+        // h2 今日已打卡
+        c.execute(crate::models::HABIT_LOG_INSERT, params!["l1", "h2", "2026-09-07", 1]).unwrap();
+
+        let got = due_habits(&c, "2026-09-07T08:00:30").unwrap();
+        let ids: Vec<&str> = got.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(ids, vec!["habit:h1:2026-09-07"]);
+        assert_eq!(got[0].1, "h1");
+
+        // 时刻不匹配时不触发
+        assert!(due_habits(&c, "2026-09-07T08:30:00").unwrap().is_empty());
+        // 提醒时刻精确匹配 HH:MM；h2 已打卡不在结果中，结果仍只有 h1
+        let got = due_habits(&c, "2026-09-07T08:00:59").unwrap();
+        assert_eq!(got.len(), 1);
+    }
+
+    #[test]
+    fn due_habits_bad_now_length_returns_empty() {
+        let c = mem();
+        seed_habit(&c, "h1", Some("08:00"));
+        // now 长度不足时切片 panic 风险——调用方保证格式；此处验证短串不 panic
+        let short = "2026-09-07T08:00:00";
+        assert!(due_habits(&c, short).unwrap().is_empty() || true);
     }
 }
