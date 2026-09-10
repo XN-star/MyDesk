@@ -215,30 +215,30 @@ CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('task', new.id, cjk_space(new.title), cjk_space(new.description));
 END;
 CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'task', old.id, old.title, old.description);
+  DELETE FROM search_index WHERE kind='task' AND ref_id=old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'task', old.id, old.title, old.description);
+  DELETE FROM search_index WHERE kind='task' AND ref_id=old.id;
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('task', new.id, cjk_space(new.title), cjk_space(new.description));
 END;
 CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('note', new.id, cjk_space(new.title), cjk_space(new.content));
 END;
 CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'note', old.id, old.title, old.content);
+  DELETE FROM search_index WHERE kind='note' AND ref_id=old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'note', old.id, old.title, old.content);
+  DELETE FROM search_index WHERE kind='note' AND ref_id=old.id;
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('note', new.id, cjk_space(new.title), cjk_space(new.content));
 END;
 CREATE TRIGGER IF NOT EXISTS links_ai AFTER INSERT ON links BEGIN
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('link', new.id, cjk_space(new.title), cjk_space(new.target));
 END;
 CREATE TRIGGER IF NOT EXISTS links_ad AFTER DELETE ON links BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'link', old.id, old.title, old.target);
+  DELETE FROM search_index WHERE kind='link' AND ref_id=old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS links_au AFTER UPDATE ON links BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'link', old.id, old.title, old.target);
+  DELETE FROM search_index WHERE kind='link' AND ref_id=old.id;
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('link', new.id, cjk_space(new.title), cjk_space(new.target));
 END;
 CREATE TABLE IF NOT EXISTS settings (
@@ -267,30 +267,30 @@ CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('task', new.id, cjk_space(new.title), cjk_space(new.description));
 END;
 CREATE TRIGGER IF NOT EXISTS tasks_ad AFTER DELETE ON tasks BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'task', old.id, old.title, old.description);
+  DELETE FROM search_index WHERE kind='task' AND ref_id=old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'task', old.id, old.title, old.description);
+  DELETE FROM search_index WHERE kind='task' AND ref_id=old.id;
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('task', new.id, cjk_space(new.title), cjk_space(new.description));
 END;
 CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('note', new.id, cjk_space(new.title), cjk_space(new.content));
 END;
 CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'note', old.id, old.title, old.content);
+  DELETE FROM search_index WHERE kind='note' AND ref_id=old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'note', old.id, old.title, old.content);
+  DELETE FROM search_index WHERE kind='note' AND ref_id=old.id;
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('note', new.id, cjk_space(new.title), cjk_space(new.content));
 END;
 CREATE TRIGGER IF NOT EXISTS links_ai AFTER INSERT ON links BEGIN
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('link', new.id, cjk_space(new.title), cjk_space(new.target));
 END;
 CREATE TRIGGER IF NOT EXISTS links_ad AFTER DELETE ON links BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'link', old.id, old.title, old.target);
+  DELETE FROM search_index WHERE kind='link' AND ref_id=old.id;
 END;
 CREATE TRIGGER IF NOT EXISTS links_au AFTER UPDATE ON links BEGIN
-  INSERT INTO search_index(search_index, kind, ref_id, title, body) VALUES('delete', 'link', old.id, old.title, old.target);
+  DELETE FROM search_index WHERE kind='link' AND ref_id=old.id;
   INSERT INTO search_index(kind, ref_id, title, body) VALUES('link', new.id, cjk_space(new.title), cjk_space(new.target));
 END;
 ";

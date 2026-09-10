@@ -129,6 +129,8 @@ pub fn run() {
             commands::link_move,
             commands::link_open,
             commands::link_run,
+            commands::global_search,
+            commands::related_notes,
             commands::settings_all,
             commands::settings_set,
             commands::timer_start,

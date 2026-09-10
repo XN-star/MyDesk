@@ -518,6 +518,16 @@ fn settings_get(app: &tauri::AppHandle, key: &str) -> Option<i64> {
 }
 
 #[tauri::command]
+pub fn global_search(db: DbState, query: String) -> Result<Vec<SearchHit>, String> {
+    with_conn(db, move |c| crate::models::global_search(c, &query))
+}
+
+#[tauri::command]
+pub fn related_notes(db: DbState, id: String) -> Result<Vec<Note>, String> {
+    with_conn(db, move |c| crate::models::related_notes(c, &id))
+}
+
+#[tauri::command]
 pub fn settings_all(db: DbState) -> Result<HashMap<String, String>, String> {    with_conn(db, |c| {
         let rows = query_all_settings(c)?;
         Ok(rows.into_iter().map(|s| (s.key, s.value)).collect())

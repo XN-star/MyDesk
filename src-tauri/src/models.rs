@@ -519,6 +519,72 @@ mod tests {
     }
 
     #[test]
+    fn global_search_finds_via_triggers() {
+        let c = mem();
+        c.execute(TASK_INSERT, params!["t1", "default", "写季度报告", "含预算分析", "todo", 1, None::<String>, 100.0, None::<String>, Some(0), None::<String>, "2026-09-10T10:00:00", "2026-09-10T10:00:00"]).unwrap();
+        c.execute(NOTE_INSERT, params!["n1", "会议记录", "讨论了预算", 0, "2026-09-10T10:00:00", "2026-09-10T10:00:00"]).unwrap();
+        c.execute(LINK_INSERT, params!["l1", "Gmail", "url", "https://mail.google.com", 100.0, "2026-09-10T10:00:00", "2026-09-10T10:00:00"]).unwrap();
+
+        let hits = global_search(&c, "预算").unwrap();
+        let kinds: Vec<&str> = hits.iter().map(|h| h.kind.as_str()).collect();
+        assert_eq!(kinds, vec!["task", "note"], "task 排 note 前");
+
+        let english = global_search(&c, "gmail").unwrap();
+        assert_eq!(english[0].kind, "link");
+    }
+
+    #[test]
+    fn global_search_updates_and_deletes_sync() {
+        let c = mem();
+        c.execute(NOTE_INSERT, params!["n1", "旧标题", "", 0, "2026-09-10T10:00:00", "2026-09-10T10:00:00"]).unwrap();
+        assert_eq!(global_search(&c, "旧标题").unwrap().len(), 1);
+
+        // 更新后命中新值、不再命中旧值
+        c.execute("UPDATE notes SET title='新标题' WHERE id='n1'", []).unwrap();
+        assert_eq!(global_search(&c, "新标题").unwrap().len(), 1);
+        assert_eq!(global_search(&c, "旧标题").unwrap().len(), 0);
+
+        // 删除后不再命中
+        c.execute("DELETE FROM notes WHERE id='n1'", []).unwrap();
+        assert_eq!(global_search(&c, "新标题").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn global_search_edge_cases() {
+        let c = mem();
+        assert!(global_search(&c, "   ").unwrap().is_empty(), "空查询");
+        c.execute(NOTE_INSERT, params!["n1", "a-b 引号\"测试", "", 0, "2026-09-10T10:00:00", "2026-09-10T10:00:00"]).unwrap();
+        // 特殊字符不报错
+        assert!(global_search(&c, "a-b").unwrap().len() >= 1);
+        assert!(global_search(&c, "引号").unwrap().len() >= 1);
+        assert!(global_search(&c, "\"").unwrap().is_empty(), "纯引号视为空");
+    }
+
+    #[test]
+    fn related_notes_finds_backlinks() {
+        let c = mem();
+        c.execute(NOTE_INSERT, params!["n1", "周会纪要", "本周重点", 0, "2026-09-10T10:00:00", "2026-09-10T10:00:00"]).unwrap();
+        c.execute(NOTE_INSERT, params!["n2", "待办", "[[周会纪要]] 里提到的任务", 0, "2026-09-10T11:00:00", "2026-09-10T11:00:00"]).unwrap();
+        c.execute(NOTE_INSERT, params!["n3", "无关", "没有链接", 0, "2026-09-10T12:00:00", "2026-09-10T12:00:00"]).unwrap();
+
+        let backlinks = related_notes(&c, "n1").unwrap();
+        let ids: Vec<&str> = backlinks.iter().map(|n| n.id.as_str()).collect();
+        assert_eq!(ids, vec!["n2"]);
+
+        // 自引用不算反链
+        let self_ref = related_notes(&c, "n2").unwrap();
+        assert!(self_ref.is_empty());
+    }
+
+    #[test]
+    fn related_notes_nonexistent_or_empty_title() {
+        let c = mem();
+        assert!(related_notes(&c, "nope").is_err());
+        c.execute(NOTE_INSERT, params!["n1", "", "正文", 0, "2026-09-10T10:00:00", "2026-09-10T10:00:00"]).unwrap();
+        assert!(related_notes(&c, "n1").unwrap().is_empty(), "空标题不查询");
+    }
+
+    #[test]
     fn task_input_defaults() {
         let json = r#"{"title":"买牛奶"}"#;
         let input: TaskInput = serde_json::from_str(json).unwrap();
