@@ -14,9 +14,11 @@ Windows 桌面个人工作台：概览 + 任务看板 + 日历日程 + 笔记 + 
 - **快捷入口**：网址/文件/命令一键启动（系统默认程序打开），网格卡片拖拽排序，关键字过滤。
 - **快速面板**：全局 `Alt+Space` 呼出；搜索任务/日程；直接输入文字回车即建任务，支持「明天 15:00」「周五」「14:30」「3点半」等日期短语，以及「每天 9:00」「每周五 18:00」「每月15号」重复提醒与「#标签」；空格列出前九个入口序号直达，`/关键词` 过滤入口回车即开。
 - **到期提醒**：任务到期弹 Windows 系统通知（应用后台运行也会触发；同一任务只提醒一次）。
-- **模块化**：设置页可开关模块；新增模块 = `src/features/` 新目录 + `src/modules/registry.ts` 注册一行。
+- **模块化**：设置页可开关模块；新增模块 = `src/features/` 新目录 + `src/modules/meta.ts` + `registry.ts` 注册一行。
+- **桌面小组件**：可选开启（设置页），桌面右下角置顶显示今日任务、下一次提醒与最近笔记，点击唤起主窗。
 - **数据与备份**：SQLite 本地存储（`%APPDATA%/personal-workstation/app.db`），设置页一键导出/导入 JSON 备份（导入校验版本，失败不写库）。
 - **主题**：跟随系统 / 浅色 / 深色，设置页切换。
+- **版本**：侧栏底部与设置页「关于」显示当前版本（v1.0.0 起提供）。
 
 ## 开发
 
@@ -24,17 +26,18 @@ Windows 桌面个人工作台：概览 + 任务看板 + 日历日程 + 笔记 + 
 npm install
 npm run tauri dev    # 开发模式
 npm run tauri build  # 产出安装包（src-tauri/target/release/bundle）
-npx vitest run       # 前端测试
+npm run test         # 前端测试（vitest）
+npm run dist         # 打包并重命名为 MyDesk-v<version>-setup.exe（输出到仓库根目录）
 cd src-tauri && cargo test  # 后端测试
 ```
 
+CI：GitHub Actions 在 Windows 上跑 `vitest → vite build → cargo test`（`.github/workflows/ci.yml`）。
+
 ## 技术栈
 
-Tauri 2 · React 19 · TypeScript · Zustand · dnd-kit · date-fns · solarlunar · rusqlite · Vitest
+Tauri 2 · React 19 · TypeScript · Zustand · dnd-kit · date-fns · solarlunar · rusqlite（FTS5） · Vitest
 
-设计文档：`docs/superpowers/specs/2026-09-07-personal-workstation-design.md`
-实现计划：`docs/superpowers/plans/2026-09-07-personal-workstation-mvp.md`
-笔记模块设计：`docs/superpowers/specs/2026-09-08-notes-module-design.md`
+设计文档：`docs/superpowers/specs/` · 变更记录：[CHANGELOG.md](CHANGELOG.md)
 
 ## 已知说明
 
