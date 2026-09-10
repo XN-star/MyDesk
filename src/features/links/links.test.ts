@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Link } from '../../types';
 import { applyLinkMove, kindIcon, normalizeTarget, searchLinks, validateTarget } from './links';
+import { entryMode } from './quickEntry';
 
 function link(partial: Partial<Link>): Link {
   return {
@@ -83,5 +84,42 @@ describe('validateTarget', () => {
   it('path/command 非空即可', () => {
     expect(validateTarget('path', 'D:\\x')).toBeNull();
     expect(validateTarget('command', 'npm run build')).toBeNull();
+  });
+});
+
+describe('entryMode（快速面板入口模式）', () => {
+  const links = [
+    link({ id: '1', title: 'Gmail', target: 'https://mail.google.com' }),
+    link({ id: '2', title: '素材', kind: 'path', target: 'D:\\assets' }),
+    link({ id: '3', title: '构建', kind: 'command', target: 'npm run build' }),
+  ];
+
+  it('空格开头进入入口模式，列出前 9 个入口', () => {
+    const m = entryMode(links, ' ');
+    expect(m).not.toBeNull();
+    expect(m!.list.map((l) => l.id)).toEqual(['1', '2', '3']);
+    expect(m!.query).toBe('');
+  });
+
+  it('空格+序号选中对应入口', () => {
+    expect(entryMode(links, ' 2')!.sel).toBe(1);
+    expect(entryMode(links, ' 9')!.sel).toBe(0); // 越界回落第一条
+  });
+
+  it('/ 开头进入 bang 模式，关键词过滤入口', () => {
+    const m = entryMode(links, '/mail');
+    expect(m).not.toBeNull();
+    expect(m!.list.map((l) => l.id)).toEqual(['1']);
+    expect(m!.sel).toBe(0);
+  });
+
+  it('/ 无匹配时列表为空', () => {
+    expect(entryMode(links, '/zzz')!.list).toHaveLength(0);
+  });
+
+  it('其他输入不进入入口模式', () => {
+    expect(entryMode(links, '明天 交报告')).toBeNull();
+    expect(entryMode(links, '/')).toBeNull(); // 纯斜杠尚未有关键词语义，且无过滤词时不启用
+    expect(entryMode(links, '')).toBeNull();
   });
 });
