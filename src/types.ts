@@ -97,3 +97,16 @@ export interface HabitLog {
   date: string;
   value: number; // 1=完成 0=未完成 2=跳过
 }
+
+export interface TimeEntry {
+  id: string;
+  taskId: string;
+  startedAt: string;
+  endedAt: string | null; // null=进行中
+}
+
+export interface RunningTimer {
+  entry: TimeEntry;
+  taskTitle: string;
+  elapsedSec: number;
+}

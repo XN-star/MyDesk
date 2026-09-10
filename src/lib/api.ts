@@ -1,11 +1,18 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput, Habit, HabitInput, HabitLog } from '../types';
+import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput, Habit, HabitInput, HabitLog, TimeEntry, RunningTimer } from '../types';
 
 export const api = {
   taskList: () => invoke<Task[]>('task_list'),
   taskCreate: (input: TaskInput) => invoke<Task>('task_create', { input }),
   taskUpdate: (task: Task) => invoke<Task>('task_update', { task }),
   taskDelete: (id: string) => invoke<void>('task_delete', { id }),
+  timerStart: (taskId: string) => invoke<TimeEntry>('timer_start', { taskId }),
+  timerStop: () => invoke<TimeEntry | null>('timer_stop'),
+  timerStatus: () => invoke<RunningTimer | null>('timer_status'),
+  timeEntries: (from: string, to: string) => invoke<TimeEntry[]>('time_entries', { from, to }),
+  pomodoroSet: (focusMin: number, breakMin: number) => invoke<void>('pomodoro_set', { focusMin, breakMin }),
+  pomodoroStart: (taskId: string | null) => invoke<void>('pomodoro_start', { taskId }),
+  pomodoroStop: () => invoke<void>('pomodoro_stop'),
   boardList: () => invoke<Board[]>('board_list'),
   boardCreate: (input: BoardInput) => invoke<Board>('board_create', { input }),
   boardRename: (id: string, name: string) => invoke<Board>('board_rename', { id, name }),

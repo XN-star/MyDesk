@@ -7,6 +7,7 @@ import { REPEAT_LABEL } from './repeat';
 import type { Repeat } from './repeat';
 import { useBoardsStore } from '../../stores/boards';
 import { useTaskStore } from '../../stores/tasks';
+import { useTimerStore } from '../../stores/timer';
 import { useUiStore } from '../../stores/ui';
 
 const PRIORITY_OPTIONS = [
@@ -204,6 +205,18 @@ export default function TaskDrawer() {
           </select>
         </div>
         <div className="drawer-actions">
+          {drawer.mode === 'edit' && editing && (
+            <button
+              className="btn"
+              onClick={() => {
+                void useTimerStore.getState().start(editing.id);
+                toast('已开始专注');
+                closeDrawer();
+              }}
+            >
+              ▶ 开始专注
+            </button>
+          )}
           <button className="btn primary" onClick={save}>
             保存
           </button>

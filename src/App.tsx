@@ -3,6 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import Sidebar from './components/Sidebar';
 import TodayBar from './components/TodayBar';
+import TimerBar from './components/TimerBar';
 import Toasts from './components/Toasts';
 import ExitDialog from './components/ExitDialog';
 import TaskDrawer from './features/tasks/TaskDrawer';
@@ -68,6 +69,7 @@ export default function App() {
       <Sidebar />
       <div className="main">
         <TodayBar />
+        <TimerBar />
         <div className="content">
           {activePage === 'settings' ? (
             <SettingsPage />
