@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { api } from '../lib/api';
-import type { ThemeMode } from '../lib/theme';
+import { normalizeAccent } from '../lib/theme';
+import type { AccentTheme, ThemeMode } from '../lib/theme';
 import { MODULE_META } from '../modules/meta';
 import { useUiStore } from './ui';
 
@@ -26,17 +27,21 @@ export function mergeNewDefaultModules(
 interface SettingsState {
   enabledModules: string[];
   theme: ThemeMode;
+  /** 主题色（accent），默认 teal */
+  accent: AccentTheme;
   /** 桌面小组件开关（默认关） */
   widgetEnabled: boolean;
   load: () => Promise<void>;
   setEnabled: (id: string, enabled: boolean) => Promise<void>;
   setTheme: (t: ThemeMode) => Promise<void>;
+  setAccent: (a: AccentTheme) => Promise<void>;
   setWidgetEnabled: (enabled: boolean) => Promise<void>;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
   enabledModules: MODULE_META.filter((m) => m.defaultEnabled).map((m) => m.id),
   theme: 'system',
+  accent: 'teal',
   widgetEnabled: false,
   load: async () => {
     try {
@@ -56,6 +61,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({
         enabledModules: result?.enabled ?? enabled,
         theme: (all.theme as ThemeMode) || 'system',
+        accent: normalizeAccent(all.accent),
         widgetEnabled: all.widgetEnabled === 'true',
       });
     } catch (e) {
@@ -72,6 +78,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setTheme: async (t) => {
     set({ theme: t });
     await api.settingsSet('theme', t);
+  },
+  setAccent: async (accent) => {
+    const next = normalizeAccent(accent);
+    set({ accent: next });
+    await api.settingsSet('accent', next);
   },
   setWidgetEnabled: async (enabled) => {
     set({ widgetEnabled: enabled });

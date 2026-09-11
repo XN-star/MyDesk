@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { confirm, open, save } from '@tauri-apps/plugin-dialog';
 import { api } from '../../lib/api';
-import type { ThemeMode } from '../../lib/theme';
+import type { AccentTheme, ThemeMode } from '../../lib/theme';
 import { MODULES } from '../../modules/registry';
 import { useSettingsStore } from '../../stores/settings';
 import { useTaskStore } from '../../stores/tasks';
@@ -13,8 +13,15 @@ const THEME_OPTIONS: Array<{ value: ThemeMode; label: string }> = [
   { value: 'dark', label: '深色' },
 ];
 
+const ACCENT_OPTIONS: Array<{ value: AccentTheme; label: string; color: string }> = [
+  { value: 'teal', label: '青碧', color: '#0d9488' },
+  { value: 'indigo', label: '靛蓝', color: '#4f46e5' },
+  { value: 'coral', label: '珊瑚', color: '#e85d3d' },
+  { value: 'slate', label: '黛青', color: '#35707e' },
+];
+
 export default function SettingsPage() {
-  const { enabledModules, theme, widgetEnabled, setEnabled, setTheme, setWidgetEnabled } =
+  const { enabledModules, theme, accent, widgetEnabled, setEnabled, setTheme, setAccent, setWidgetEnabled } =
     useSettingsStore();
   const toast = useUiStore((s) => s.toast);
   // 番茄档位（分钟），从 settings 读取，本地编辑后保存
@@ -112,6 +119,21 @@ export default function SettingsPage() {
               </option>
             ))}
           </select>
+        </div>
+        <div className="settings-row">
+          <span>主题色</span>
+          <span className="accent-picker">
+            {ACCENT_OPTIONS.map((o) => (
+              <button
+                key={o.value}
+                className={`accent-dot${accent === o.value ? ' active' : ''}`}
+                style={{ background: o.color }}
+                title={o.label}
+                aria-label={o.label}
+                onClick={() => void setAccent(o.value)}
+              />
+            ))}
+          </span>
         </div>
       </section>
       <section className="panel settings-card">
