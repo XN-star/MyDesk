@@ -9,3 +9,6 @@ dist/
 .zcode/
 .mimosa/
 .playwright-mcp/
+
+# 视觉伴侣会话文件
+.superpowers/
