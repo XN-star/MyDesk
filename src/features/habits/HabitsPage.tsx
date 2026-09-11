@@ -5,10 +5,12 @@ import {
   bestStreak,
   currentScore,
   dailyChecked,
-  heatmapData,
+  habitCounts,
+  hitMilestone,
   streak,
 } from './habits';
 import { useHabitsStore } from '../../stores/habits';
+import { quickHabitStates } from './quickHabits';
 import Celebration from '../../components/Celebration';
 
 const FREQUENCY_LABEL: Record<HabitFrequency, string> = {
@@ -16,8 +18,6 @@ const FREQUENCY_LABEL: Record<HabitFrequency, string> = {
   weekly: '每周',
   monthly: '每月',
 };
-
-const HEAT_WEEKS = 52;
 
 export default function HabitsPage() {
   const habits = useHabitsStore((s) => s.habits);
@@ -27,6 +27,7 @@ export default function HabitsPage() {
   const select = useHabitsStore((s) => s.select);
   const toggle = useHabitsStore((s) => s.toggle);
   const remove = useHabitsStore((s) => s.remove);
+  const create = useHabitsStore((s) => s.create);
 
   const [editing, setEditing] = useState<Habit | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -41,6 +42,14 @@ export default function HabitsPage() {
   }, [load]);
 
   const current = habits.find((h) => h.id === selectedId) ?? null;
+  const quickStates = useMemo(() => quickHabitStates(habits), [habits]);
+  const allTaken = quickStates.every((q) => q.taken);
+
+  /** 速建：一键创建常用每日习惯并选中；已存在（taken）的点击无事发生。 */
+  async function handleQuickAdd(name: string) {
+    if (useHabitsStore.getState().habits.some((h) => !h.archived && h.name === name)) return;
+    await create({ name, frequency: 'daily' });
+  }
 
   async function handleDelete() {
     if (!current) return;
@@ -70,7 +79,7 @@ export default function HabitsPage() {
         {habits.length === 0 ? (
           <div className="day-empty">还没有习惯，建一个开始坚持吧</div>
         ) : (
-          <div className="habit-rows">
+          <div className="habit-grid">
             {habits.map((h) => {
               const hLogs = logs.filter((l) => l.habitId === h.id);
               const checked = dailyChecked(logs, h.id, today);
@@ -79,64 +88,68 @@ export default function HabitsPage() {
                 <div
                   key={h.id}
                   data-habit-row={h.id}
-                  className={`habit-row${h.id === selectedId ? ' active' : ''}`}
+                  className={`habit-card${h.id === selectedId ? ' selected' : ''}`}
                   onClick={() => select(h.id)}
                 >
-                  <input
-                    type="checkbox"
-                    className="habit-check"
-                    checked={checked}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => void toggle(h.id)}
-                  />
-                  <span className={`habit-name${checked ? ' done' : ''}`}>{h.name}</span>
-                  <span className="habit-freq">{FREQUENCY_LABEL[h.frequency]}</span>
-                  <span className={`habit-streak${checked ? ' bump' : ''}`} title="连续天数">
-                    🔥 {streak(hLogs, today)}
-                  </span>
-                  <span className="habit-score" title="强度分数">
-                    {Math.round(score * 100)}%
-                  </span>
+                  <div className="habit-card-main">
+                    <span className={`habit-name${checked ? ' done' : ''}`}>{h.name}</span>
+                    <span className="habit-card-meta">
+                      <span className="habit-freq">{FREQUENCY_LABEL[h.frequency]}</span>
+                      <span className={`habit-streak${checked ? ' bump' : ''}`} title="连续天数">
+                        🔥 {streak(hLogs, today)}
+                      </span>
+                      <span className="habit-score" title="强度分数">
+                        {Math.round(score * 100)}%
+                      </span>
+                    </span>
+                  </div>
+                  <button
+                    className={`habit-check-btn${checked ? ' checked' : ''}`}
+                    title={checked ? '取消打卡' : '打卡'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void toggle(h.id);
+                    }}
+                  >
+                    ✓
+                  </button>
                 </div>
               );
             })}
           </div>
         )}
+        {!allTaken && (
+          <div className="quick-habits">
+            <span className="muted quick-habits-label">常用速建</span>
+            <div className="quick-habit-chips">
+              {quickStates.map((q) => (
+                <button
+                  key={q.name}
+                  className={`chip quick-habit-chip${q.taken ? ' taken' : ''}`}
+                  disabled={q.taken}
+                  title={q.taken ? '已存在同名习惯' : `新建每日习惯「${q.name}」`}
+                  onClick={() => void handleQuickAdd(q.name)}
+                >
+                  {q.taken ? '✓ ' : ''}
+                  {q.emoji} {q.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {current && (
-        <section className="panel">
-          <div className="habits-head">
-            <h3>{current.name} · 近一年</h3>
-            <div className="habit-actions">
-              <button
-                className="btn"
-                onClick={() => {
-                  setEditing(current);
-                  setShowForm(true);
-                }}
-              >
-                编辑
-              </button>
-              <button className="btn danger" onClick={() => void handleDelete()}>
-                删除
-              </button>
-            </div>
-          </div>
-          <HabitHeatmap habitId={current.id} logs={logs} today={today} />
-          <div className="habit-summary">
-            <span>
-              当前连续 <b>{streak(logs.filter((l) => l.habitId === current.id), today)}</b> 天
-            </span>
-            <span>
-              最长连续 <b>{bestStreak(logs.filter((l) => l.habitId === current.id))}</b> 天
-            </span>
-            <span>
-              强度 <b>{Math.round(currentScore(current, logs.filter((l) => l.habitId === current.id), today) * 100)}%</b>
-            </span>
-            {current.reminder && <span>提醒 {current.reminder}</span>}
-          </div>
-        </section>
+        <HabitDetail
+          habit={current}
+          logs={logs}
+          today={today}
+          onEdit={() => {
+            setEditing(current);
+            setShowForm(true);
+          }}
+          onDelete={() => void handleDelete()}
+        />
       )}
 
       {showForm && (
@@ -149,40 +162,63 @@ export default function HabitsPage() {
   );
 }
 
-function HabitHeatmap({
-  habitId,
+/** 选中习惯的统计详情：本周/本月/本年次数 + 连续/强度大数字块。 */
+function HabitDetail({
+  habit,
   logs,
   today,
+  onEdit,
+  onDelete,
 }: {
-  habitId: string;
+  habit: Habit;
   logs: Array<{ id: string; habitId: string; date: string; value: number }>;
   today: string;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
-  const cells = useMemo(
-    () => heatmapData(logs.filter((l) => l.habitId === habitId), HEAT_WEEKS, today),
-    [logs, habitId, today],
-  );
-  const [start, ...rest] = cells;
+  const hLogs = useMemo(() => logs.filter((l) => l.habitId === habit.id), [logs, habit.id]);
+  const counts = useMemo(() => habitCounts(logs, habit.id, today), [logs, habit.id, today]);
+  const days = streak(hLogs, today);
+  const milestone = dailyChecked(logs, habit.id, today) ? hitMilestone(days) : null;
+
   return (
-    <div className="heatmap">
-      <div className="heatmap-col">{start && <Cell key={start.date} cell={start} />}</div>
-      {Array.from({ length: Math.ceil(rest.length / 7) }, (_, w) => (
-        <div className="heatmap-col" key={w}>
-          {rest.slice(w * 7, w * 7 + 7).map((c) => (
-            <Cell key={c.date} cell={c} />
-          ))}
+    <section className="panel">
+      <div className="habits-head">
+        <h3>{habit.name} · 统计</h3>
+        <div className="habit-actions">
+          <button className="btn" onClick={onEdit}>
+            编辑
+          </button>
+          <button className="btn danger" onClick={onDelete}>
+            删除
+          </button>
         </div>
-      ))}
-    </div>
+      </div>
+      <div className="habit-stats-grid">
+        <StatItem value={counts.week} label="本周" />
+        <StatItem value={counts.month} label="本月" />
+        <StatItem value={counts.year} label="本年" />
+        <StatItem value={days} label="连续天数" fire />
+        <StatItem value={bestStreak(hLogs)} label="最长连续" />
+        <StatItem value={`${Math.round(currentScore(habit, hLogs, today) * 100)}%`} label="强度" />
+      </div>
+      <div className="habit-summary">
+        {habit.reminder && <span>提醒 {habit.reminder}</span>}
+        {milestone && <span className="habit-milestone">🎉 里程碑：连续 {milestone} 天！</span>}
+      </div>
+    </section>
   );
 }
 
-function Cell({ cell }: { cell: { date: string; value: number } }) {
+function StatItem({ value, label, fire }: { value: number | string; label: string; fire?: boolean }) {
   return (
-    <span
-      className={`hcell${cell.value > 0 ? ` v${cell.value}` : ''}`}
-      title={`${cell.date}${cell.value === 1 ? '：已打卡' : cell.value === 2 ? '：跳过' : ''}`}
-    />
+    <div className="stat-item">
+      <b>
+        {fire ? '🔥 ' : ''}
+        {value}
+      </b>
+      <span>{label}</span>
+    </div>
   );
 }
 

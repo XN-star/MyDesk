@@ -120,31 +120,43 @@ export function bestStreak(logs: HabitLog[]): number {
   return best;
 }
 
-/** 热力图数据：以 today 结尾、对齐周日起始的 weeks×7 网格。 */
-export function heatmapData(
-  logs: HabitLog[],
-  weeks: number,
-  today: string,
-): Array<{ date: string; value: number }> {
-  const byDate = new Map(logs.filter((l) => l.value === 1).map((l) => [l.date, l.value]));
-  const todayD = new Date(`${today}T00:00:00`);
-  const daysAfterSunday = todayD.getDay(); // 周日=0
-  const end = new Date(todayD);
-  end.setDate(end.getDate() + (6 - daysAfterSunday)); // 补齐到周六
-  const cells: Array<{ date: string; value: number }> = [];
-  for (let i = weeks * 7 - 1; i >= 0; i--) {
-    const d = new Date(end);
-    d.setDate(d.getDate() - i);
-    const p = (n: number) => String(n).padStart(2, '0');
-    const date = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-    cells.push({ date, value: byDate.get(date) ?? 0 });
-  }
-  return cells;
-}
-
 /** 当日是否已打卡。 */
 export function dailyChecked(logs: HabitLog[], habitId: string, date: string): boolean {
   return logs.some((l) => l.habitId === habitId && l.date === date && l.value === 1);
+}
+
+/** 所在周的周一（ISO 周，周一起算）。 */
+export function mondayOf(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  const day = d.getDay(); // 周日=0
+  const delta = day === 0 ? -6 : 1 - day;
+  return addDays(date, delta);
+}
+
+export interface HabitCounts {
+  /** 本周（周一起算）打卡次数 */
+  week: number;
+  /** 本月（1 号起算）打卡次数 */
+  month: number;
+  /** 本年（1 月 1 日起算）打卡次数 */
+  year: number;
+}
+
+/** 本周/本月/本年打卡次数（value=1 的日志计数；区间含端点）。 */
+export function habitCounts(logs: HabitLog[], habitId: string, today: string): HabitCounts {
+  const weekFrom = mondayOf(today);
+  const monthFrom = `${today.slice(0, 7)}-01`;
+  const yearFrom = `${today.slice(0, 4)}-01-01`;
+  let week = 0;
+  let month = 0;
+  let year = 0;
+  for (const l of logs) {
+    if (l.habitId !== habitId || l.value !== 1) continue;
+    if (l.date >= weekFrom && l.date <= today) week += 1;
+    if (l.date >= monthFrom && l.date <= today) month += 1;
+    if (l.date >= yearFrom && l.date <= today) year += 1;
+  }
+  return { week, month, year };
 }
 
 /** 打卡里程碑：连续天数命中即庆祝。 */

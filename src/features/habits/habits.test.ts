@@ -5,9 +5,10 @@ import {
   currentScore,
   dailyChecked,
   frequencyFactor,
+  habitCounts,
   habitScore,
-  heatmapData,
   hitMilestone,
+  mondayOf,
   multiplier,
   streak,
 } from './habits';
@@ -112,26 +113,55 @@ describe('currentScore', () => {
   });
 });
 
-describe('heatmapData', () => {
-  it('产出 52 周且对齐到周六结尾的网格（GitHub contributions 式）', () => {
-    const cells = heatmapData([], 52, '2026-09-09'); // 周三
-    expect(cells).toHaveLength(52 * 7);
-    // 最后一个格子是本周周六
-    expect(cells[cells.length - 1].date).toBe('2026-09-12');
-  });
-
-  it('有日志的日期 value=1', () => {
-    const cells = heatmapData([log('h1', '2026-09-09')], 52, '2026-09-09');
-    const hit = cells.find((c) => c.date === '2026-09-09');
-    expect(hit?.value).toBe(1);
-  });
-});
-
 describe('dailyChecked', () => {
   it('按习惯 id 判断当日是否已打卡', () => {
     const logs = [log('h1', '2026-09-09')];
     expect(dailyChecked(logs, 'h1', '2026-09-09')).toBe(true);
     expect(dailyChecked(logs, 'h2', '2026-09-09')).toBe(false);
+  });
+});
+
+describe('habitCounts', () => {
+  it('本周/本月/本年分别计数（2026-09-09 是周三）', () => {
+    const logs = [
+      log('h1', '2026-09-07'), // 本周一
+      log('h1', '2026-09-09'), // 今天
+      log('h1', '2026-09-01'), // 本月，上周二
+      log('h1', '2026-01-15'), // 今年 1 月
+      log('h1', '2025-12-31'), // 去年，全部不计
+      log('h1', '2026-09-10', 2), // 未来日期不存在，但 value=2 跳过不计数
+      log('h2', '2026-09-09'), // 别的习惯
+    ];
+    expect(habitCounts(logs, 'h1', '2026-09-09')).toEqual({ week: 2, month: 3, year: 4 });
+  });
+
+  it('周一恰好是一周起点（2026-09-07 周一）', () => {
+    const logs = [log('h1', '2026-09-07'), log('h1', '2026-09-06')];
+    expect(habitCounts(logs, 'h1', '2026-09-07')).toEqual({ week: 1, month: 2, year: 2 });
+  });
+
+  it('月边界：1 号算本月；上月最后一天不算月但同属 ISO 周则计周', () => {
+    // 2026-09-01 是周二，本周一是 08-31
+    const logs = [log('h1', '2026-09-01'), log('h1', '2026-08-31')];
+    expect(habitCounts(logs, 'h1', '2026-09-01')).toEqual({ week: 2, month: 1, year: 2 });
+  });
+
+  it('年边界与空日志（ISO 跨年周计入本周）', () => {
+    // 2026-01-01 是周四，本周一是 2025-12-29，12-31 属于同一 ISO 周
+    expect(habitCounts([log('h1', '2025-12-31')], 'h1', '2026-01-01')).toEqual({
+      week: 1,
+      month: 0,
+      year: 0,
+    });
+    expect(habitCounts([], 'h1', '2026-09-09')).toEqual({ week: 0, month: 0, year: 0 });
+  });
+});
+
+describe('mondayOf', () => {
+  it('周日回退到上周一，周一返回自身', () => {
+    expect(mondayOf('2026-09-13')).toBe('2026-09-07'); // 周日
+    expect(mondayOf('2026-09-07')).toBe('2026-09-07'); // 周一
+    expect(mondayOf('2026-09-12')).toBe('2026-09-07'); // 周六
   });
 });
 
