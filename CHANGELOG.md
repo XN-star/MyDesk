@@ -2,6 +2,30 @@
 
 MyDesk 个人工作台（PersonalWorkstation）。格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [1.0.2] - 2026-09-11
+
+UI 轻量视觉刷新：设计 token 体系、克制微动效、四主题色选项。
+
+### 新增
+
+- **主题色选项**：设置 → 外观新增主题色选择器——青碧（新默认）/ 靛蓝 / 珊瑚 / 黛青四色即时切换并持久化（settings 表 `accent` 键）；品牌渐变字、侧栏选中态等全部跟随变化。
+- **三窗口主题同步**：主窗口通过 `theme://changed` 事件广播主题与主题色，快速面板与桌面小组件启动时读取设置并实时跟随（`useThemeSync` hook）。
+- **克制微动效**：按钮/列表/卡片过渡基线（120-180ms）、卡片 hover 浮起加阴影、输入框聚焦淡色 ring、弹层出场缩放动画、页面切换淡入；`prefers-reduced-motion` 下全部关闭。
+
+### 打磨
+
+- **设计 token 体系**：主题色包（accent/hover/soft/contrast/brand-grad × 浅深两态）、圆角三档（6/8/12px，替换原 4-14px 混用）、阴影两档、遮罩色、动效时长，集中定义于 `index.css` 顶部；硬编码阴影/渐变/圆角全部归档。
+- 键盘焦点可见性（`:focus-visible` outline）、webkit 滚动条细化（窄条 + 主题色）。
+- 深色模式悬浮层提亮一档（`--panel-pop`），弹层边框改用 `--border-strong`。
+- 优先级四色在 CSS 与 `TaskCard.tsx` 两处加互指注释，防止后续改色失同步。
+- `index.html` 标题与语言由脚手架默认改为 MyDesk / zh-CN。
+
+### 修复
+
+- **快速面板与桌面小组件不跟随主题**：两窗口此前未调用 `applyTheme`，深浅色设置对它们无效；现统一接入 `useThemeSync`。
+- **`.month-grid` 双重定义冲突**：日历页实线网格版与日期选择弹层间隙版属性互相覆盖；拆为 `.month-grid-page` / `.month-grid-popup` 两个类（`MonthGrid` 新增 `variant` prop）。
+- `.settings-row small` 重复定义合并。
+
 ## [1.0.1] - 2026-09-10
 
 三项用户反馈修复。
