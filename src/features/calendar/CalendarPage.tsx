@@ -52,6 +52,7 @@ export default function CalendarPage() {
           onPick={setSelected}
           renderDots={renderDots}
           showLunar
+          variant="page"
         />
       </div>
       <DayPanel date={selected} />

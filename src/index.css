@@ -118,12 +118,15 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .calendar { padding: 14px; display: flex; flex-direction: column; min-height: 0; }
 .calendar-head { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 10px; }
 .calendar-title { font-weight: 600; }
-/* 实线网格分割 */
-.month-grid {
-  display: grid; grid-template-columns: repeat(7, 1fr); flex: 1;
+/* 月历网格基类（CalendarPage 实线版与 DatePicker 弹层间隙版共用） */
+.month-grid { display: grid; grid-template-columns: repeat(7, 1fr); flex: 1; }
+.month-grid-page {
   grid-template-rows: 28px repeat(5, minmax(56px, 1fr)) minmax(56px, 1fr);
   border-top: 1px solid var(--border); border-left: 1px solid var(--border);
 }
+.month-grid-popup { gap: 4px; grid-auto-rows: 1fr; }
+.month-grid-popup .calendar-week { border: none; background: none; }
+.month-grid-popup .calendar-cell { border: none; border-radius: 6px; min-height: 36px; }
 .calendar-week {
   text-align: center; line-height: 28px; color: var(--muted);
   border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
@@ -212,12 +215,9 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .settings-card { padding: 16px 20px; }
 .settings-card h3 { margin: 0 0 10px; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
-.settings-row small { display: block; color: var(--muted); }
+.settings-row small { display: block; color: var(--muted); font-weight: 400; }
 .settings-actions { display: flex; gap: 8px; }
 .muted { color: var(--muted); }
-
-/* 月历网格（CalendarPage 与 DatePicker 弹层共用） */
-.month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; flex: 1; grid-auto-rows: 1fr; }
 
 /* 日期选择器弹层 */
 .date-picker { position: relative; display: inline-flex; align-items: center; gap: 4px; flex: 1; }
@@ -325,7 +325,6 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 /* 版本标识 */
 .sidebar-version { margin-top: auto; padding: 8px 4px 2px; font-size: 11px; color: var(--muted); text-align: center; }
 .pomodoro-inputs { display: flex; align-items: center; gap: 6px; }
-.settings-row small { display: block; color: var(--muted); font-weight: 400; }
 .about-line b { color: var(--accent); }
 
 /* 专注页 */

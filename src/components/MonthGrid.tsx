@@ -29,12 +29,15 @@ export default function MonthGrid({
   onPick,
   renderDots,
   showLunar = false,
+  variant = 'popup',
 }: {
   month: Date;
   selectedDate: string;
   onPick: (date: string) => void;
   renderDots?: (date: string) => React.ReactNode;
   showLunar?: boolean;
+  /** page=日历页实线网格；popup=日期选择弹层间隙网格 */
+  variant?: 'page' | 'popup';
 }) {
   const days = useMemo(
     () =>
@@ -46,7 +49,7 @@ export default function MonthGrid({
   );
 
   return (
-    <div className="month-grid">
+    <div className={`month-grid ${variant === 'page' ? 'month-grid-page' : 'month-grid-popup'}`}>
       {WEEK_LABELS.map((w) => (
         <div key={w} className="calendar-week">
           {w}
