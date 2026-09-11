@@ -7,6 +7,7 @@ import { REPEAT_LABEL } from './repeat';
 import { useTimerStore } from '../../stores/timer';
 import { useTaskStore } from '../../stores/tasks';
 
+// 与 index.css 的 .tdot.p0-p3 保持一致
 const PRIORITY_COLORS = ['#9ca3af', '#60a5fa', '#f59e0b', '#ef4444'];
 
 export default function TaskCard({ task, onClick }: { task: Task; onClick: () => void }) {
