@@ -6,6 +6,7 @@ import { todayFocus } from '../overview/overview';
 import { useTaskStore } from '../../stores/tasks';
 import { useTimerStore } from '../../stores/timer';
 import { useUiStore } from '../../stores/ui';
+import { FOCUS_MODES, displayTitleOf, findFocusModeTask } from './focusModes';
 
 function mmss(totalSec: number): string {
   const m = Math.floor(totalSec / 60);
@@ -13,13 +14,15 @@ function mmss(totalSec: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-/** 专注页：任务计时器 + 番茄钟 + 今日工时总结的唯一入口。 */
+/** 专注页：任务计时器 + 番茄钟 + 无任务专注模式 + 今日工时总结的唯一入口。 */
 export default function FocusPage() {
   const running = useTimerStore((s) => s.running);
   const loadTimer = useTimerStore((s) => s.load);
   const startTimer = useTimerStore((s) => s.start);
   const stopTimer = useTimerStore((s) => s.stop);
   const tasks = useTaskStore((s) => s.tasks);
+  const loadTasks = useTaskStore((s) => s.load);
+  const createTask = useTaskStore((s) => s.create);
   const toast = useUiStore((s) => s.toast);
 
   const [entries, setEntries] = useState<TimeEntry[]>([]);
@@ -27,9 +30,11 @@ export default function FocusPage() {
   const [elapsed, setElapsed] = useState(0);
   const [focusMin, setFocusMin] = useState(25);
   const [breakMin, setBreakMin] = useState(5);
+  const [startingMode, setStartingMode] = useState<string | null>(null);
 
   useEffect(() => {
     void loadTimer();
+    void loadTasks();
     api
       .settingsAll()
       .then((all) => {
@@ -37,7 +42,7 @@ export default function FocusPage() {
         setBreakMin(Number(all.pomodoroBreak) || 5);
       })
       .catch(() => {});
-  }, [loadTimer]);
+  }, [loadTimer, loadTasks]);
 
   // 今日条目：计时状态变化（开始/停止）后重拉
   useEffect(() => {
@@ -80,15 +85,37 @@ export default function FocusPage() {
     }
   }
 
+  /** 无任务专注：确保模式对应的隐藏任务存在，再以它开始计时。 */
+  async function handleMode(modeName: string) {
+    if (running || startingMode) return;
+    setStartingMode(modeName);
+    try {
+      let task = findFocusModeTask(tasks, modeName);
+      if (!task) {
+        task = await createTask({ title: `focus_mode:${modeName}`, boardId: 'default' });
+      } else if (task.status === 'done') {
+        // 上次用完被打成完成，复活为待办再计时
+        const revived = { ...task, status: 'todo' as const, doneAt: null };
+        await useTaskStore.getState().update(revived);
+        task = revived;
+      }
+      await startTimer(task.id);
+    } catch {
+      // 错误 toast 已由 store 统一处理
+    } finally {
+      setStartingMode(null);
+    }
+  }
+
   return (
     <div className="focus-page">
       <section className="panel focus-timer">
         <div className="focus-clock">{running ? mmss(elapsed) : mmss(0)}</div>
         <div className="focus-status">
           {running ? (
-            <>正在专注：{running.taskTitle}</>
+            <>正在专注：{displayTitleOf(running.taskTitle)}</>
           ) : (
-            <>选择一个任务开始专注</>
+            <>选择一个任务开始专注，或挑一种模式</>
           )}
         </div>
         <div className="focus-controls">
@@ -98,7 +125,7 @@ export default function FocusPage() {
                 <option value="">选择任务…</option>
                 {openTasks.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.title}
+                    {displayTitleOf(t.title)}
                   </option>
                 ))}
               </select>
@@ -148,6 +175,28 @@ export default function FocusPage() {
         </p>
       </section>
 
+      {!running && (
+        <section className="panel focus-modes">
+          <h3>🌙 无任务专注</h3>
+          <p className="muted focus-modes-hint">不挂任务也能计时——点一下就进入模式</p>
+          <div className="mode-grid">
+            {FOCUS_MODES.map((m) => (
+              <button
+                key={m.name}
+                className="mode-card"
+                disabled={startingMode !== null}
+                onClick={() => void handleMode(m.name)}
+                title={`约 ${m.suggestedMin} 分钟 · ${m.hint}`}
+              >
+                <span className="mode-emoji">{m.emoji}</span>
+                <span className="mode-name">{m.name}</span>
+                <span className="mode-min">{m.suggestedMin} 分钟</span>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="panel focus-report">
         <h3>⏱ 今日工时（{focus.totalMin} 分钟）</h3>
         {focus.byTask.length === 0 ? (
@@ -156,7 +205,7 @@ export default function FocusPage() {
           <ul className="overview-list">
             {focus.byTask.map((x) => (
               <li key={x.taskId}>
-                <span className="ov-title">{x.title}</span>
+                <span className="ov-title">{displayTitleOf(x.title)}</span>
                 <span className="ov-time">{x.minutes} 分钟</span>
               </li>
             ))}

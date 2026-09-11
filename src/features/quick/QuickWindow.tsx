@@ -8,6 +8,7 @@ import type { Link, SearchHit, Task } from '../../types';
 import { entryMode } from '../links/quickEntry';
 import { kindIcon } from '../links/links';
 import { parseQuickTask } from './parseQuickTask';
+import { displayTitleOf } from '../focus/focusModes';
 
 interface Hit {
   type: 'task' | 'link' | 'note';
@@ -28,7 +29,7 @@ function localTaskHits(q: string, tasks: Task[]): Hit[] {
   if (!s) return [];
   return tasks
     .filter((x) => x.title.toLowerCase().includes(s))
-    .map((x) => ({ type: 'task' as const, id: x.id, label: x.title }))
+    .map((x) => ({ type: 'task' as const, id: x.id, label: displayTitleOf(x.title) }))
     .slice(0, 8);
 }
 
@@ -40,7 +41,7 @@ function mergeHits(local: Hit[], fts: SearchHit[]): Hit[] {
     .map((h) => ({
       type: h.kind as Hit['type'],
       id: h.refId,
-      label: h.title || '（无标题）',
+      label: displayTitleOf(h.title || '（无标题）'),
       sub: h.body ? h.body.slice(0, 30) : undefined,
     }));
   return [...local, ...ftsHits].slice(0, 12);

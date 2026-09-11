@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { useTimerStore } from '../stores/timer';
 import { useUiStore } from '../stores/ui';
+import { displayTitleOf } from '../features/focus/focusModes';
 
 function mmss(totalSec: number): string {
   const m = Math.floor(totalSec / 60);
@@ -48,7 +49,7 @@ export default function TimerBar() {
   return (
     <div className="timer-bar">
       <span className="timer-dot" />
-      <span className="timer-title">{running.taskTitle}</span>
+      <span className="timer-title">{displayTitleOf(running.taskTitle)}</span>
       <span className="timer-clock">{mmss(elapsed)}</span>
       <div className="timer-actions">
         <button className="btn" onClick={() => setPomoOpen((v) => !v)} title="番茄钟">
