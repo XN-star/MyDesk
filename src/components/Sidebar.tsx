@@ -26,12 +26,13 @@ export default function Sidebar() {
           title={m.name}
           onClick={() => setPage(m.id)}
         >
-          <span className="side-icon">{m.icon}</span>
+          <span className="side-icon" style={m.color ? { color: m.color } : undefined}>
+            {m.icon}
+          </span>
           <span className="side-name">{m.name}</span>
         </button>
       ))}
       <div className="sidebar-spacer" />
-      <div className="sidebar-version">v{__APP_VERSION__}</div>
       <button
         className={`side-item${activePage === 'settings' ? ' active' : ''}`}
         title="设置"

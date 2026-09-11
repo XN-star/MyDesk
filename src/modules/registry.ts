@@ -17,6 +17,8 @@ export interface Module {
   icon: string;
   description: string;
   defaultEnabled: boolean;
+  /** 侧边栏图标专属色（继承自 meta） */
+  color?: string;
   route: string;
   component: ComponentType;
 }

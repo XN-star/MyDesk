@@ -231,29 +231,65 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .habits-page { display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
 .habits-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .habits-head h3 { margin: 0; font-size: 14px; }
-.habit-rows { display: flex; flex-direction: column; }
-.habit-row { display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px dashed var(--border); cursor: pointer; border-radius: var(--radius-md); }
-.habit-row:last-child { border-bottom: none; }
-.habit-row.active { background: var(--bg); }
-.habit-name { font-size: 14px; }
-.habit-name.done { color: var(--muted); text-decoration: line-through; }
-.habit-freq { color: var(--muted); font-size: 12px; }
-.habit-streak { margin-left: auto; font-size: 12px; }
-.habit-score { font-size: 12px; color: var(--muted); width: 44px; text-align: right; }
+/* 习惯卡片网格（双列） */
+.habit-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.habit-card {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px; border-radius: var(--radius-lg);
+  background: var(--bg); border: 1px solid var(--border); cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
+    box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.habit-card:hover { border-color: var(--accent); box-shadow: var(--shadow-1); transform: translateY(-1px); }
+.habit-card.selected { background: var(--accent-soft); border-color: var(--accent); }
+.habit-card-main { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.habit-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.habit-name.done { color: var(--muted); text-decoration: line-through; font-weight: 400; }
+.habit-card-meta { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+.habit-freq { color: var(--muted); }
+.habit-streak { color: var(--muted); }
+.habit-score { color: var(--muted); }
 .habit-actions { display: flex; gap: 8px; }
-.habit-summary { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 10px; }
+/* 圆形打卡按钮 */
+.habit-check-btn {
+  width: 40px; height: 40px; flex: none; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 18px; font-weight: 700; line-height: 1;
+  color: var(--muted); background: var(--panel); border: 2px solid var(--border);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.habit-check-btn:hover { border-color: var(--accent); color: var(--accent); transform: scale(1.06); }
+.habit-check-btn:active { transform: scale(0.94); }
+.habit-check-btn.checked {
+  background: var(--accent); border-color: var(--accent);
+  color: var(--accent-contrast);
+  animation: check-pop .3s var(--ease);
+}
+/* 统计块（详情区，替代热力图） */
+.habit-stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+.stat-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 14px 6px; border-radius: var(--radius-lg);
+  background: var(--bg); border: 1px solid var(--border);
+}
+.stat-item b { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat-item span { font-size: 12px; color: var(--muted); }
+.habit-summary { display: flex; gap: 18px; flex-wrap: wrap; color: var(--muted); font-size: 13px; margin-top: 12px; }
 .habit-summary b { color: var(--text); }
-.heatmap { display: flex; gap: 3px; overflow-x: auto; padding: 6px 0; }
-.heatmap-col { display: flex; flex-direction: column; gap: 3px; }
-.hcell { width: 11px; height: 11px; border-radius: 2px; background: var(--bg); border: 1px solid var(--border); flex: none; }
-.hcell.v1 { background: var(--accent); border-color: var(--accent); }
-.hcell.v2 { background: var(--border); border-color: var(--border); }
-/* 打卡仪式感：勾选 pop、🔥 bump、庆祝粒子 */
-.habit-check { accent-color: var(--accent); }
-.habit-check:checked { animation: check-pop .3s var(--ease); }
+.habit-milestone { color: var(--accent); font-weight: 600; }
+/* 打卡仪式感：🔥 bump、庆祝粒子（勾选 pop 移至 .habit-check-btn） */
 .habit-streak.bump { animation: streak-bump .45s var(--ease); }
 @keyframes check-pop { 0% { transform: scale(1); } 45% { transform: scale(1.35); } 100% { transform: scale(1); } }
 @keyframes streak-bump { 0% { transform: scale(1); } 40% { transform: scale(1.35) rotate(-6deg); } 100% { transform: scale(1); } }
+/* 常用速建 chips */
+.quick-habits { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.quick-habits-label { font-size: 12px; flex: none; }
+.quick-habit-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.quick-habit-chip { padding: 3px 10px; font-size: 12px; }
+.quick-habit-chip.taken { opacity: .55; }
+.quick-habit-chip:disabled { cursor: default; }
 .celebration-layer { position: fixed; inset: 0; pointer-events: none; z-index: 98; }
 .confetti {
   position: absolute; left: 0; top: 0; width: 8px; height: 12px;
@@ -424,8 +460,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .accent-dot:hover { transform: scale(1.12); }
 .accent-dot.active { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
 
-/* 版本标识 */
-.sidebar-version { margin-top: auto; padding: 8px 4px 2px; font-size: 11px; color: var(--muted); text-align: center; }
+/* 版本标识（设置页「关于」仍展示；侧栏版本已移除） */
 .pomodoro-inputs { display: flex; align-items: center; gap: 6px; }
 .about-line b { color: var(--accent); }
 
@@ -439,6 +474,24 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .focus-hint { font-size: 12px; text-align: center; }
 .focus-report { padding: 16px 20px; }
 .focus-report h3 { margin: 0 0 10px; font-size: 14px; }
+/* 无任务专注模式 */
+.focus-modes { padding: 16px 20px; }
+.focus-modes h3 { margin: 0 0 4px; font-size: 14px; }
+.focus-modes-hint { margin: 0 0 12px; font-size: 12px; }
+.mode-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.mode-card {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 14px 8px 10px; border-radius: var(--radius-lg);
+  background: var(--bg); border: 1px solid var(--border); cursor: pointer;
+  transition: border-color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
+    transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+.mode-card:hover { border-color: var(--accent); background: var(--accent-soft); transform: translateY(-2px); box-shadow: var(--shadow-1); }
+.mode-card:active { transform: translateY(0); }
+.mode-card:disabled { opacity: .55; cursor: wait; }
+.mode-emoji { font-size: 24px; line-height: 1.2; }
+.mode-name { font-size: 13px; font-weight: 600; }
+.mode-min { font-size: 11px; color: var(--muted); }
 
 /* 快捷入口网格 */
 .links-page { display: flex; flex-direction: column; gap: 12px; height: 100%; min-height: 0; }
@@ -594,7 +647,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 
 /* ===== 动效与可访问性 ===== */
 /* 交互过渡基线 */
-.btn, .side-item, .note-item, .quick-item, .widget-row, .habit-row, .ov-chip,
+.btn, .side-item, .note-item, .quick-item, .widget-row, .habit-card, .mode-card, .ov-chip,
 .link-card, .overview-card, .task-card, .accent-dot, .input, .quick-input,
 .notes-content, .picker-clear, .spinner-arrow, .task-timer-btn, .settings-row input[type='checkbox'] {
   transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),

@@ -5,6 +5,8 @@ export interface ModuleMeta {
   icon: string;
   description: string;
   defaultEnabled: boolean;
+  /** 侧边栏图标的专属色（灵动感）；不设则回退主题色 */
+  color?: string;
 }
 
 export const MODULE_META: ModuleMeta[] = [
@@ -14,6 +16,7 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '◈',
     description: '今日一眼看清',
     defaultEnabled: true,
+    color: '#0ea5a0',
   },
   {
     id: 'tasks',
@@ -21,6 +24,7 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '▦',
     description: '三列拖拽任务管理',
     defaultEnabled: true,
+    color: '#3b82f6',
   },
   {
     id: 'focus',
@@ -28,6 +32,7 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '⏱',
     description: '番茄钟与心流计时',
     defaultEnabled: true,
+    color: '#8b5cf6',
   },
   {
     id: 'calendar',
@@ -35,6 +40,7 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '▤',
     description: '月历与当日日程',
     defaultEnabled: true,
+    color: '#f59e0b',
   },
   {
     id: 'habits',
@@ -42,6 +48,7 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '◉',
     description: '每日打卡与热力图',
     defaultEnabled: true,
+    color: '#ef4444',
   },
   {
     id: 'notes',
@@ -49,6 +56,7 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '✎',
     description: '随手记灵感与想法',
     defaultEnabled: true,
+    color: '#22c55e',
   },
   {
     id: 'ledger',
@@ -56,6 +64,7 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '¥',
     description: '收支预算一目了然',
     defaultEnabled: true,
+    color: '#eab308',
   },
   {
     id: 'fitness',
@@ -63,6 +72,7 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '⚖',
     description: '体重趋势与锻炼打卡',
     defaultEnabled: true,
+    color: '#ec4899',
   },
   {
     id: 'links',
@@ -70,5 +80,6 @@ export const MODULE_META: ModuleMeta[] = [
     icon: '⚡',
     description: '网址/文件/命令快速启动',
     defaultEnabled: true,
+    color: '#06b6d4',
   },
 ];
