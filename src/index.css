@@ -88,7 +88,7 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 6px 12px; cursor: pointer;
 }
-.btn:hover { border-color: var(--accent); }
+.btn:hover { border-color: var(--accent); background: var(--bg); }
 .btn.primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); }
 .btn.primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn.danger { color: var(--danger); }
@@ -463,3 +463,51 @@ input, textarea, select, button { font-family: inherit; color: inherit; }
 .board-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
 .board-bar select { width: 200px; }
 .board-bar .kanban { flex: 1; min-height: 0; }
+
+/* ===== 动效与可访问性 ===== */
+/* 交互过渡基线 */
+.btn, .side-item, .note-item, .quick-item, .widget-row, .habit-row, .ov-chip,
+.link-card, .overview-card, .task-card, .accent-dot, .input, .quick-input,
+.notes-content, .picker-clear, .spinner-arrow, .task-timer-btn, .settings-row input[type='checkbox'] {
+  transition: background-color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.btn:active { transform: translateY(1px); }
+
+/* 卡片 hover：位移仅用于非拖拽卡片；task-card 拖拽语义只加阴影 */
+.overview-card:hover, .link-card:hover { border-color: var(--accent); box-shadow: var(--shadow-1); transform: translateY(-1px); }
+.task-card:hover { box-shadow: var(--shadow-1); }
+
+/* 输入聚焦 ring */
+.input:focus, .quick-input:focus, .notes-content:focus, .notes-title-input:focus {
+  border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); outline: none;
+}
+
+/* 键盘焦点可见性 */
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* 弹层出场动画（只做出场） */
+@keyframes pop-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: scale(1); } }
+@keyframes fade-in { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+@keyframes slide-in-right { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+.picker-pop, .spinner-pop, .timer-pomo, .link-candidates, .dialog, .toast { animation: pop-in var(--dur) var(--ease); }
+.drawer { animation: slide-in-right var(--dur) var(--ease); }
+.page-fade { height: 100%; animation: fade-in var(--dur) var(--ease); }
+
+/* 滚动条细化 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border); border-radius: 5px;
+  border: 2px solid transparent; background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: padding-box; }
+
+/* 减弱动态效果偏好：关闭全部动画 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

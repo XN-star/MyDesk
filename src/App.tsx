@@ -81,13 +81,15 @@ export default function App() {
         <TodayBar />
         <TimerBar />
         <div className="content">
-          {activePage === 'settings' ? (
-            <SettingsPage />
-          ) : Page ? (
-            <Page />
-          ) : (
-            <div className="empty">请先在设置中启用至少一个模块</div>
-          )}
+          <div className="page-fade" key={activePage}>
+            {activePage === 'settings' ? (
+              <SettingsPage />
+            ) : Page ? (
+              <Page />
+            ) : (
+              <div className="empty">请先在设置中启用至少一个模块</div>
+            )}
+          </div>
         </div>
       </div>
       {drawer && <TaskDrawer />}
