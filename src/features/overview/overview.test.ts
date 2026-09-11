@@ -24,19 +24,20 @@ function task(p: Partial<Task>): Task {
 }
 
 describe('taskStats', () => {
-  it('统计今日待办/进行中/今日完成/逾期', () => {
+  it('统计未完成任务/进行中/今日完成/逾期（未完成含无截止与未来截止）', () => {
     const stats = taskStats(
       [
-        task({ id: '1', dueAt: '2026-09-09T18:00:00' }), // 今日待办
+        task({ id: '1', dueAt: '2026-09-09T18:00:00' }), // 今日截止待办
         task({ id: '2', status: 'doing' }), // 进行中
         task({ id: '3', status: 'done', doneAt: '2026-09-09T09:00:00' }), // 今日完成
         task({ id: '4', dueAt: '2026-09-08T10:00:00' }), // 逾期
-        task({ id: '5' }), // 无截止待办，不计入 todoToday
-        task({ id: '6', dueAt: '2026-09-10T10:00:00' }), // 明天，不计
+        task({ id: '5' }), // 无截止待办，计入 todoToday
+        task({ id: '6', dueAt: '2026-09-10T10:00:00' }), // 明天截止，计入 todoToday
       ],
       NOW,
     );
-    expect(stats).toEqual({ todoToday: 1, doing: 1, doneToday: 1, overdue: 1 });
+    // 未完成 4 条：今日截止 + 逾期 + 无截止 + 明天截止（逾期同时计入 overdue）
+    expect(stats).toEqual({ todoToday: 4, doing: 1, doneToday: 1, overdue: 1 });
   });
 
   it('昨天完成不计入今日完成', () => {

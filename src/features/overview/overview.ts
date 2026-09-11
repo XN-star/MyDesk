@@ -9,7 +9,7 @@ export interface TaskStats {
   overdue: number;
 }
 
-/** 今日任务统计：今日到期待办、进行中、今日完成、逾期（未完成且截止已过）。 */
+/** 今日任务统计：未完成任务（含无截止与未来截止）、进行中、今日完成、逾期（未完成且截止已过）。 */
 export function taskStats(tasks: Task[], now: Date): TaskStats {
   const today = toDateStr(now);
   let todoToday = 0;
@@ -17,15 +17,17 @@ export function taskStats(tasks: Task[], now: Date): TaskStats {
   let doneToday = 0;
   let overdue = 0;
   for (const t of tasks) {
-    if (t.status === 'doing') doing += 1;
+    if (t.status === 'doing') {
+      doing += 1;
+      continue;
+    }
     if (t.status === 'done') {
       if (t.doneAt && toDateStr(new Date(t.doneAt)) === today) doneToday += 1;
       continue;
     }
-    if (t.dueAt) {
-      if (t.dueAt < fromDate(now)) overdue += 1;
-      else if (toDateStr(new Date(t.dueAt)) === today) todoToday += 1;
-    }
+    // 未完成（todo）：全部计入，与顶栏「未完成任务」口径一致
+    todoToday += 1;
+    if (t.dueAt && t.dueAt < fromDate(now)) overdue += 1;
   }
   return { todoToday, doing, doneToday, overdue };
 }
