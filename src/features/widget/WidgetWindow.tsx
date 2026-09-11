@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { api } from '../../lib/api';
+import { useThemeSync } from '../../lib/theme';
 import type { Note, Task } from '../../types';
 import { dueLabel } from '../../lib/format';
 
@@ -17,6 +18,7 @@ export interface WidgetData {
  * 纯 React 声明式渲染——React 管理的 root 里不能手动 append DOM（会被清空导致白板）。
  */
 export default function WidgetWindow() {
+  useThemeSync();
   const [data, setData] = useState<WidgetData | null>(null);
 
   useEffect(() => {

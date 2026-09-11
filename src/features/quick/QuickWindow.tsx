@@ -3,6 +3,7 @@ import type React from 'react';
 import { emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { api } from '../../lib/api';
+import { useThemeSync } from '../../lib/theme';
 import type { Link, SearchHit, Task } from '../../types';
 import { entryMode } from '../links/quickEntry';
 import { kindIcon } from '../links/links';
@@ -46,6 +47,7 @@ function mergeHits(local: Hit[], fts: SearchHit[]): Hit[] {
 }
 
 export default function QuickWindow() {
+  useThemeSync();
   const [q, setQ] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [links, setLinks] = useState<Link[]>([]);

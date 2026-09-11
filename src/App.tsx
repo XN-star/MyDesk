@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import Sidebar from './components/Sidebar';
 import TodayBar from './components/TodayBar';
@@ -9,7 +9,7 @@ import ExitDialog from './components/ExitDialog';
 import TaskDrawer from './features/tasks/TaskDrawer';
 import SettingsPage from './features/settings/SettingsPage';
 import { enabledModules } from './modules/registry';
-import { applyTheme } from './lib/theme';
+import { applyTheme, THEME_EVENT } from './lib/theme';
 import { useBoardsStore } from './stores/boards';
 import { useNotesStore } from './stores/notes';
 import { useSettingsStore } from './stores/settings';
@@ -21,6 +21,7 @@ export default function App() {
   const drawer = useUiStore((s) => s.drawer);
   const enabled = enabledModules(useSettingsStore((s) => s.enabledModules));
   const theme = useSettingsStore((s) => s.theme);
+  const accent = useSettingsStore((s) => s.accent);
   const [showExit, setShowExit] = useState(false);
 
   useEffect(() => {
@@ -31,16 +32,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    applyTheme(theme, accent);
+    void emit(THEME_EVENT, { theme, accent });
+  }, [theme, accent]);
 
   useEffect(() => {
     if (theme !== 'system') return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const fn = () => applyTheme('system');
+    const fn = () => {
+      applyTheme('system', accent);
+      void emit(THEME_EVENT, { theme: 'system', accent });
+    };
     mq.addEventListener('change', fn);
     return () => mq.removeEventListener('change', fn);
-  }, [theme]);
+  }, [theme, accent]);
 
   useEffect(() => {
     const un1 = listen('quick://changed', () => {
