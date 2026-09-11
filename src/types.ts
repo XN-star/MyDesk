@@ -119,3 +119,60 @@ export interface SearchHit {
   title: string;
   body: string;
 }
+
+export type LedgerKind = 'expense' | 'income';
+
+export interface LedgerEntry {
+  id: string;
+  kind: LedgerKind;
+  /** 金额，整数分 */
+  amount: number;
+  category: string;
+  note: string;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LedgerEntryInput {
+  kind?: LedgerKind;
+  amount: number;
+  category?: string;
+  note?: string;
+  date: string;
+}
+
+export interface WeightLog {
+  id: string;
+  date: string;
+  /** 体重 kg */
+  weight: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WorkoutType =
+  | '跑步'
+  | '力量'
+  | '游泳'
+  | '骑行'
+  | '球类'
+  | '瑜伽'
+  | '其他';
+
+export interface WorkoutLog {
+  id: string;
+  date: string;
+  type: WorkoutType;
+  minutes: number;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkoutLogInput {
+  date: string;
+  type?: WorkoutType;
+  minutes: number;
+  note?: string;
+}

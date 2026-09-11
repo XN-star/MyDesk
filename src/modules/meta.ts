@@ -10,9 +10,9 @@ export interface ModuleMeta {
 export const MODULE_META: ModuleMeta[] = [
   {
     id: 'overview',
-    name: '概览',
+    name: '今日速览',
     icon: '◈',
-    description: '今日信息一览',
+    description: '今日一眼看清',
     defaultEnabled: true,
   },
   {
@@ -24,30 +24,44 @@ export const MODULE_META: ModuleMeta[] = [
   },
   {
     id: 'focus',
-    name: '专注',
+    name: '心流专注',
     icon: '⏱',
-    description: '任务计时与番茄钟',
+    description: '番茄钟与心流计时',
     defaultEnabled: true,
   },
   {
     id: 'calendar',
-    name: '日历',
+    name: '时光月历',
     icon: '▤',
     description: '月历与当日日程',
     defaultEnabled: true,
   },
   {
     id: 'habits',
-    name: '习惯',
+    name: '习惯打卡',
     icon: '◉',
-    description: '打卡追踪与热力图',
+    description: '每日打卡与热力图',
     defaultEnabled: true,
   },
   {
     id: 'notes',
-    name: '笔记',
+    name: '灵感速记',
     icon: '✎',
-    description: '纯文本快速记录',
+    description: '随手记灵感与想法',
+    defaultEnabled: true,
+  },
+  {
+    id: 'ledger',
+    name: '随手记账',
+    icon: '¥',
+    description: '收支预算一目了然',
+    defaultEnabled: true,
+  },
+  {
+    id: 'fitness',
+    name: '轻盈计划',
+    icon: '⚖',
+    description: '体重趋势与锻炼打卡',
     defaultEnabled: true,
   },
   {

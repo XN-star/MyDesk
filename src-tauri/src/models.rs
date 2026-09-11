@@ -22,6 +22,14 @@ pub const HABIT_LOG_INSERT: &str =
 pub const TIME_ENTRY_COLS: &str = "id, task_id, started_at, ended_at";
 pub const TIME_ENTRY_INSERT: &str =
     "INSERT INTO time_entries (id, task_id, started_at, ended_at) VALUES (?1,?2,?3,?4)";
+pub const LEDGER_ENTRY_COLS: &str = "id, kind, amount, category, note, date, created_at, updated_at";
+pub const LEDGER_ENTRY_INSERT: &str =
+    "INSERT INTO ledger_entries (id, kind, amount, category, note, date, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)";
+pub const WEIGHT_LOG_COLS: &str = "id, date, weight, created_at, updated_at";
+pub const WEIGHT_LOG_UPSERT: &str = "INSERT INTO weight_logs (id, date, weight, created_at, updated_at) VALUES (?1,?2,?3,?4,?5) ON CONFLICT(date) DO UPDATE SET weight=?3, updated_at=?5";
+pub const WORKOUT_LOG_COLS: &str = "id, date, type, minutes, note, created_at, updated_at";
+pub const WORKOUT_LOG_INSERT: &str =
+    "INSERT INTO workout_logs (id, date, type, minutes, note, created_at, updated_at) VALUES (?1,?2,?3,?4,?5,?6,?7)";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -203,6 +211,79 @@ pub struct SearchHit {
     pub ref_id: String,
     pub title: String,
     pub body: String,
+}
+
+/// 记账条目：kind='expense'|'income'，amount 一律为整数分（避免浮点误差）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerEntry {
+    pub id: String,
+    pub kind: String,
+    pub amount: i64,
+    pub category: String,
+    #[serde(default)]
+    pub note: String,
+    pub date: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LedgerEntryInput {
+    #[serde(default = "dft_ledger_kind")]
+    pub kind: String,
+    pub amount: i64,
+    #[serde(default)]
+    pub category: String,
+    #[serde(default)]
+    pub note: String,
+    pub date: String,
+}
+
+fn dft_ledger_kind() -> String {
+    "expense".into()
+}
+
+/// 体重记录：每天至多一条（UNIQUE(date)），同日再记为覆盖。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WeightLog {
+    pub id: String,
+    pub date: String,
+    pub weight: f64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// 锻炼记录：type 为类型名（跑步/力量/游泳…），minutes 为时长分钟数。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkoutLog {
+    pub id: String,
+    pub date: String,
+    #[serde(rename = "type")]
+    pub workout_type: String,
+    pub minutes: i64,
+    #[serde(default)]
+    pub note: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkoutLogInput {
+    pub date: String,
+    #[serde(rename = "type", default = "dft_workout_type")]
+    pub workout_type: String,
+    pub minutes: i64,
+    #[serde(default)]
+    pub note: String,
+}
+
+fn dft_workout_type() -> String {
+    "其他".into()
 }
 
 pub fn task_from_row(r: &Row) -> rusqlite::Result<Task> {
@@ -416,6 +497,74 @@ pub fn related_notes(c: &Connection, id: &str) -> rusqlite::Result<Vec<Note>> {
         "SELECT {NOTE_COLS} FROM notes WHERE id != ?1 AND content LIKE ?2 ESCAPE '\\' ORDER BY updated_at DESC LIMIT 20"
     ))?;
     let rows = stmt.query_map(params![id, pattern], note_from_row)?;
+    rows.collect()
+}
+
+pub fn ledger_entry_from_row(r: &Row) -> rusqlite::Result<LedgerEntry> {
+    Ok(LedgerEntry {
+        id: r.get(0)?,
+        kind: r.get(1)?,
+        amount: r.get(2)?,
+        category: r.get(3)?,
+        note: r.get(4)?,
+        date: r.get(5)?,
+        created_at: r.get(6)?,
+        updated_at: r.get(7)?,
+    })
+}
+
+/// 区间记账条目（含边界），按日期降序。
+pub fn query_ledger_between(
+    c: &Connection,
+    from: &str,
+    to: &str,
+) -> rusqlite::Result<Vec<LedgerEntry>> {
+    let mut stmt = c.prepare(&format!(
+        "SELECT {LEDGER_ENTRY_COLS} FROM ledger_entries WHERE date >= ?1 AND date <= ?2 ORDER BY date DESC, created_at DESC"
+    ))?;
+    let rows = stmt.query_map(params![from, to], ledger_entry_from_row)?;
+    rows.collect()
+}
+
+/// 全量体重记录（表很小，不做分页），按日期升序。
+pub fn query_all_weights(c: &Connection) -> rusqlite::Result<Vec<WeightLog>> {
+    let mut stmt = c.prepare(&format!(
+        "SELECT {WEIGHT_LOG_COLS} FROM weight_logs ORDER BY date"
+    ))?;
+    let rows = stmt.query_map([], |r| {
+        Ok(WeightLog {
+            id: r.get(0)?,
+            date: r.get(1)?,
+            weight: r.get(2)?,
+            created_at: r.get(3)?,
+            updated_at: r.get(4)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn workout_log_from_row(r: &Row) -> rusqlite::Result<WorkoutLog> {
+    Ok(WorkoutLog {
+        id: r.get(0)?,
+        date: r.get(1)?,
+        workout_type: r.get(2)?,
+        minutes: r.get(3)?,
+        note: r.get(4)?,
+        created_at: r.get(5)?,
+        updated_at: r.get(6)?,
+    })
+}
+
+/// 区间锻炼记录（含边界），按日期降序。
+pub fn query_workouts_between(
+    c: &Connection,
+    from: &str,
+    to: &str,
+) -> rusqlite::Result<Vec<WorkoutLog>> {
+    let mut stmt = c.prepare(&format!(
+        "SELECT {WORKOUT_LOG_COLS} FROM workout_logs WHERE date >= ?1 AND date <= ?2 ORDER BY date DESC, created_at DESC"
+    ))?;
+    let rows = stmt.query_map(params![from, to], workout_log_from_row)?;
     rows.collect()
 }
 
@@ -693,5 +842,44 @@ mod tests {
         let json2 = r#"{"title":"工作","boardId":"b2"}"#;
         let input2: TaskInput = serde_json::from_str(json2).unwrap();
         assert_eq!(input2.board_id.as_deref(), Some("b2"));
+    }
+
+    #[test]
+    fn ledger_roundtrip_and_range_query() {
+        let c = mem();
+        c.execute(LEDGER_ENTRY_INSERT, params!["e1", "expense", 1800, "餐饮", "牛肉面", "2026-09-11", "2026-09-11T12:00:00", "2026-09-11T12:00:00"]).unwrap();
+        c.execute(LEDGER_ENTRY_INSERT, params!["e2", "income", 30000, "工资", "", "2026-09-01", "2026-09-01T09:00:00", "2026-09-01T09:00:00"]).unwrap();
+        let got = query_ledger_between(&c, "2026-09-01", "2026-09-10").unwrap();
+        let ids: Vec<&str> = got.iter().map(|e| e.id.as_str()).collect();
+        assert_eq!(ids, vec!["e2"], "区间过滤 + 日期降序");
+        assert_eq!(got[0].amount, 30000);
+        assert_eq!(got[0].kind, "income");
+        let input: LedgerEntryInput = serde_json::from_str(r#"{"amount":2500,"date":"2026-09-12"}"#).unwrap();
+        assert_eq!(input.kind, "expense", "kind 默认支出");
+    }
+
+    #[test]
+    fn weight_upsert_overwrites_same_day() {
+        let c = mem();
+        c.execute(WEIGHT_LOG_UPSERT, params!["w1", "2026-09-11", 72.5, "2026-09-11T08:00:00", "2026-09-11T08:00:00"]).unwrap();
+        c.execute(WEIGHT_LOG_UPSERT, params!["w1", "2026-09-11", 72.3, "2026-09-11T08:00:00", "2026-09-11T20:00:00"]).unwrap();
+        let got = query_all_weights(&c).unwrap();
+        assert_eq!(got.len(), 1, "同日重复记录被覆盖");
+        assert!((got[0].weight - 72.3).abs() < f64::EPSILON);
+        assert_eq!(got[0].updated_at, "2026-09-11T20:00:00");
+    }
+
+    #[test]
+    fn workout_roundtrip_and_range_query() {
+        let c = mem();
+        c.execute(WORKOUT_LOG_INSERT, params!["k1", "2026-09-11", "跑步", 30, "慢跑5公里", "2026-09-11T19:00:00", "2026-09-11T19:00:00"]).unwrap();
+        c.execute(WORKOUT_LOG_INSERT, params!["k2", "2026-09-09", "力量", 45, "", "2026-09-09T19:00:00", "2026-09-09T19:00:00"]).unwrap();
+        let got = query_workouts_between(&c, "2026-09-10", "2026-09-12").unwrap();
+        let ids: Vec<&str> = got.iter().map(|k| k.id.as_str()).collect();
+        assert_eq!(ids, vec!["k1"]);
+        assert_eq!(got[0].workout_type, "跑步");
+        assert_eq!(got[0].minutes, 30);
+        let input: WorkoutLogInput = serde_json::from_str(r#"{"date":"2026-09-12","minutes":60}"#).unwrap();
+        assert_eq!(input.workout_type, "其他", "type 默认其他");
     }
 }

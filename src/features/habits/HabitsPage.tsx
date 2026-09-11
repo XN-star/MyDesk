@@ -9,6 +9,7 @@ import {
   streak,
 } from './habits';
 import { useHabitsStore } from '../../stores/habits';
+import Celebration from '../../components/Celebration';
 
 const FREQUENCY_LABEL: Record<HabitFrequency, string> = {
   daily: '每天',
@@ -52,6 +53,7 @@ export default function HabitsPage() {
 
   return (
     <div className="habits-page">
+      <Celebration />
       <section className="panel">
         <div className="habits-head">
           <h3>今日打卡</h3>
@@ -76,18 +78,20 @@ export default function HabitsPage() {
               return (
                 <div
                   key={h.id}
+                  data-habit-row={h.id}
                   className={`habit-row${h.id === selectedId ? ' active' : ''}`}
                   onClick={() => select(h.id)}
                 >
                   <input
                     type="checkbox"
+                    className="habit-check"
                     checked={checked}
                     onClick={(e) => e.stopPropagation()}
                     onChange={() => void toggle(h.id)}
                   />
                   <span className={`habit-name${checked ? ' done' : ''}`}>{h.name}</span>
                   <span className="habit-freq">{FREQUENCY_LABEL[h.frequency]}</span>
-                  <span className="habit-streak" title="连续天数">
+                  <span className={`habit-streak${checked ? ' bump' : ''}`} title="连续天数">
                     🔥 {streak(hLogs, today)}
                   </span>
                   <span className="habit-score" title="强度分数">

@@ -7,6 +7,7 @@ import {
   frequencyFactor,
   habitScore,
   heatmapData,
+  hitMilestone,
   multiplier,
   streak,
 } from './habits';
@@ -131,5 +132,22 @@ describe('dailyChecked', () => {
     const logs = [log('h1', '2026-09-09')];
     expect(dailyChecked(logs, 'h1', '2026-09-09')).toBe(true);
     expect(dailyChecked(logs, 'h2', '2026-09-09')).toBe(false);
+  });
+});
+
+describe('hitMilestone', () => {
+  it('命中里程碑返回天数', () => {
+    for (const m of [7, 21, 66, 100, 365, 500, 1000]) {
+      expect(hitMilestone(m)).toBe(m);
+    }
+  });
+
+  it('未命中返回 null', () => {
+    expect(hitMilestone(0)).toBeNull();
+    expect(hitMilestone(1)).toBeNull();
+    expect(hitMilestone(6)).toBeNull();
+    expect(hitMilestone(8)).toBeNull();
+    expect(hitMilestone(99)).toBeNull();
+    expect(hitMilestone(366)).toBeNull();
   });
 });

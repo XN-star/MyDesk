@@ -72,8 +72,8 @@ export default function WidgetWindow() {
       )}
 
       <div className="widget-section">
-        <div className="widget-section-title">最近笔记</div>
-        {(data?.recentNotes.length ?? 0) === 0 && <div className="widget-empty">还没有笔记</div>}
+        <div className="widget-section-title">最近速记</div>
+        {(data?.recentNotes.length ?? 0) === 0 && <div className="widget-empty">还没有速记</div>}
         {data?.recentNotes.map((n) => (
           <button key={n.id} className="widget-row" onClick={() => void openMain('note', n.id)}>
             {n.title || '无标题'}

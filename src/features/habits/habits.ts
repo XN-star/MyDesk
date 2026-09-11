@@ -146,3 +146,11 @@ export function heatmapData(
 export function dailyChecked(logs: HabitLog[], habitId: string, date: string): boolean {
   return logs.some((l) => l.habitId === habitId && l.date === date && l.value === 1);
 }
+
+/** 打卡里程碑：连续天数命中即庆祝。 */
+export const MILESTONES = [7, 21, 66, 100, 365, 500, 1000] as const;
+
+/** 命中里程碑则返回天数，否则返回 null。 */
+export function hitMilestone(streakDays: number): number | null {
+  return (MILESTONES as readonly number[]).includes(streakDays) ? streakDays : null;
+}

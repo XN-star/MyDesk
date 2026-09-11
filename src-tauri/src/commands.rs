@@ -394,6 +394,126 @@ pub fn habit_logs(db: DbState, from: String, to: String) -> Result<Vec<HabitLog>
     with_conn(db, move |c| query_logs_between(c, &from, &to))
 }
 
+#[tauri::command]
+pub fn ledger_list(db: DbState, from: String, to: String) -> Result<Vec<LedgerEntry>, String> {
+    with_conn(db, move |c| query_ledger_between(c, &from, &to))
+}
+
+#[tauri::command]
+pub fn ledger_create(db: DbState, input: LedgerEntryInput) -> Result<LedgerEntry, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        let entry = LedgerEntry {
+            id: Uuid::new_v4().to_string(),
+            kind: input.kind,
+            amount: input.amount,
+            category: input.category,
+            note: input.note,
+            date: input.date,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        c.execute(
+            LEDGER_ENTRY_INSERT,
+            params![entry.id, entry.kind, entry.amount, entry.category, entry.note, entry.date, entry.created_at, entry.updated_at],
+        )?;
+        Ok(entry)
+    })
+}
+
+#[tauri::command]
+pub fn ledger_update(db: DbState, entry: LedgerEntry) -> Result<LedgerEntry, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        c.execute(
+            "UPDATE ledger_entries SET kind=?2, amount=?3, category=?4, note=?5, date=?6, updated_at=?7 WHERE id=?1",
+            params![entry.id, entry.kind, entry.amount, entry.category, entry.note, entry.date, now],
+        )?;
+        Ok(LedgerEntry { updated_at: now, ..entry })
+    })
+}
+
+#[tauri::command]
+pub fn ledger_delete(db: DbState, id: String) -> Result<(), String> {
+    with_conn(db, move |c| {
+        c.execute("DELETE FROM ledger_entries WHERE id=?1", params![id])?;
+        Ok(())
+    })
+}
+
+/// 体重记录：同日重记为覆盖（UNIQUE(date) upsert）。
+#[tauri::command]
+pub fn weight_upsert(db: DbState, date: String, weight: f64) -> Result<WeightLog, String> {
+    let now = now_iso();
+    let id = format!("w-{date}");
+    with_conn(db, move |c| {
+        c.execute(
+            WEIGHT_LOG_UPSERT,
+            params![id, date, weight, now, now],
+        )?;
+        Ok(WeightLog { id, date, weight, created_at: now.clone(), updated_at: now })
+    })
+}
+
+#[tauri::command]
+pub fn weight_list(db: DbState) -> Result<Vec<WeightLog>, String> {
+    with_conn(db, query_all_weights)
+}
+
+#[tauri::command]
+pub fn weight_delete(db: DbState, id: String) -> Result<(), String> {
+    with_conn(db, move |c| {
+        c.execute("DELETE FROM weight_logs WHERE id=?1", params![id])?;
+        Ok(())
+    })
+}
+
+#[tauri::command]
+pub fn workout_list(db: DbState, from: String, to: String) -> Result<Vec<WorkoutLog>, String> {
+    with_conn(db, move |c| query_workouts_between(c, &from, &to))
+}
+
+#[tauri::command]
+pub fn workout_create(db: DbState, input: WorkoutLogInput) -> Result<WorkoutLog, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        let log = WorkoutLog {
+            id: Uuid::new_v4().to_string(),
+            date: input.date,
+            workout_type: input.workout_type,
+            minutes: input.minutes,
+            note: input.note,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        c.execute(
+            WORKOUT_LOG_INSERT,
+            params![log.id, log.date, log.workout_type, log.minutes, log.note, log.created_at, log.updated_at],
+        )?;
+        Ok(log)
+    })
+}
+
+#[tauri::command]
+pub fn workout_update(db: DbState, log: WorkoutLog) -> Result<WorkoutLog, String> {
+    let now = now_iso();
+    with_conn(db, move |c| {
+        c.execute(
+            "UPDATE workout_logs SET date=?2, type=?3, minutes=?4, note=?5, updated_at=?6 WHERE id=?1",
+            params![log.id, log.date, log.workout_type, log.minutes, log.note, now],
+        )?;
+        Ok(WorkoutLog { updated_at: now, ..log })
+    })
+}
+
+#[tauri::command]
+pub fn workout_delete(db: DbState, id: String) -> Result<(), String> {
+    with_conn(db, move |c| {
+        c.execute("DELETE FROM workout_logs WHERE id=?1", params![id])?;
+        Ok(())
+    })
+}
+
 /// 开始计时：已存在进行中条目则先自动停止（同一时间只允许一个计时）。
 #[tauri::command]
 pub fn timer_start(db: DbState, task_id: String) -> Result<TimeEntry, String> {

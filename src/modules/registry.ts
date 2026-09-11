@@ -7,6 +7,8 @@ import NotesPage from '../features/notes/NotesPage';
 import LinksPage from '../features/links/LinksPage';
 import OverviewPage from '../features/overview/OverviewPage';
 import HabitsPage from '../features/habits/HabitsPage';
+import LedgerPage from '../features/ledger/LedgerPage';
+import FitnessPage from '../features/fitness/FitnessPage';
 
 /** 完整模块 = 静态元数据 + 组件/路由。 */
 export interface Module {
@@ -26,6 +28,8 @@ const ROUTES: Record<string, string> = {
   calendar: '/calendar',
   habits: '/habits',
   notes: '/notes',
+  ledger: '/ledger',
+  fitness: '/fitness',
   links: '/links',
 };
 
@@ -36,6 +40,8 @@ const COMPONENTS: Record<string, ComponentType> = {
   calendar: CalendarPage,
   habits: HabitsPage,
   notes: NotesPage,
+  ledger: LedgerPage,
+  fitness: FitnessPage,
   links: LinksPage,
 };
 

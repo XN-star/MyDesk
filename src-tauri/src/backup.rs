@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 use serde_json::{json, Value};
 use std::path::Path;
 
-pub const VERSION: i64 = 9;
+pub const VERSION: i64 = 10;
 
 pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let tasks = query_all_tasks(conn)?;
@@ -14,6 +14,9 @@ pub fn export(conn: &Connection, path: &Path) -> Result<()> {
     let habits = query_all_habits(conn)?;
     let habit_logs = query_logs_between(conn, "0000-01-01", "9999-12-31")?;
     let time_entries = query_entries_between(conn, "0000-01-01T00:00:00", "9999-12-31T23:59:59")?;
+    let ledger_entries = query_ledger_between(conn, "0000-01-01", "9999-12-31")?;
+    let weight_logs = query_all_weights(conn)?;
+    let workout_logs = query_workouts_between(conn, "0000-01-01", "9999-12-31")?;
     let settings = query_all_settings(conn)?;
     let doc = json!({
         "version": VERSION,
@@ -25,6 +28,9 @@ pub fn export(conn: &Connection, path: &Path) -> Result<()> {
         "habits": habits,
         "habitLogs": habit_logs,
         "timeEntries": time_entries,
+        "ledgerEntries": ledger_entries,
+        "weightLogs": weight_logs,
+        "workoutLogs": workout_logs,
         "settings": settings,
     });
     std::fs::write(path, serde_json::to_vec_pretty(&doc)?)?;
@@ -83,6 +89,19 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     // v1–v7 备份没有 timeEntries 字段，视为空（整库替换语义）。
     let time_entries: Vec<TimeEntry> = match doc.get("timeEntries") {
         Some(v) => serde_json::from_value(v.clone()).context("timeEntries 字段格式错误")?,
+        None => Vec::new(),
+    };
+    // v1–v9 备份没有 ledgerEntries/weightLogs/workoutLogs 字段，视为空（整库替换语义）。
+    let ledger_entries: Vec<LedgerEntry> = match doc.get("ledgerEntries") {
+        Some(v) => serde_json::from_value(v.clone()).context("ledgerEntries 字段格式错误")?,
+        None => Vec::new(),
+    };
+    let weight_logs: Vec<WeightLog> = match doc.get("weightLogs") {
+        Some(v) => serde_json::from_value(v.clone()).context("weightLogs 字段格式错误")?,
+        None => Vec::new(),
+    };
+    let workout_logs: Vec<WorkoutLog> = match doc.get("workoutLogs") {
+        Some(v) => serde_json::from_value(v.clone()).context("workoutLogs 字段格式错误")?,
         None => Vec::new(),
     };
     // v9 起备份不含 FTS 索引（虚拟表不导出），导入后全量重建。
@@ -154,6 +173,9 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
     tx.execute("DELETE FROM habits", [])?;
     tx.execute("DELETE FROM habit_logs", [])?;
     tx.execute("DELETE FROM time_entries", [])?;
+    tx.execute("DELETE FROM ledger_entries", [])?;
+    tx.execute("DELETE FROM weight_logs", [])?;
+    tx.execute("DELETE FROM workout_logs", [])?;
     tx.execute("DELETE FROM settings", [])?;
     for t in tasks.iter().chain(converted.iter()) {
         tx.execute(
@@ -208,6 +230,24 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
             params![e.id, e.task_id, e.started_at, e.ended_at],
         )?;
     }
+    for l in &ledger_entries {
+        tx.execute(
+            LEDGER_ENTRY_INSERT,
+            params![l.id, l.kind, l.amount, l.category, l.note, l.date, l.created_at, l.updated_at],
+        )?;
+    }
+    for w in &weight_logs {
+        tx.execute(
+            WEIGHT_LOG_UPSERT,
+            params![w.id, w.date, w.weight, w.created_at, w.updated_at],
+        )?;
+    }
+    for k in &workout_logs {
+        tx.execute(
+            WORKOUT_LOG_INSERT,
+            params![k.id, k.date, k.workout_type, k.minutes, k.note, k.created_at, k.updated_at],
+        )?;
+    }
     // 任何备份导入后保证 default 看板存在
     tx.execute(
         "INSERT OR IGNORE INTO boards (id, name, created_at, updated_at) VALUES ('default', '默认看板', '2026-09-09T00:00:00', '2026-09-09T00:00:00')",
@@ -231,7 +271,10 @@ pub fn import(conn: &mut Connection, path: &Path) -> Result<usize> {
         + links.len()
         + habits.len()
         + habit_logs.len()
-        + time_entries.len())
+        + time_entries.len()
+        + ledger_entries.len()
+        + weight_logs.len()
+        + workout_logs.len())
 }
 
 #[cfg(test)]
@@ -266,7 +309,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 9);
+        assert_eq!(doc["version"], 10);
         std::fs::remove_file(&file).ok();
     }
 
@@ -290,7 +333,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 9);
+        assert_eq!(doc["version"], 10);
         std::fs::remove_file(&file).ok();
     }
 
@@ -342,7 +385,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 9);
+        assert_eq!(doc["version"], 10);
         std::fs::remove_file(&file).ok();
     }
 
@@ -394,7 +437,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 9);
+        assert_eq!(doc["version"], 10);
         std::fs::remove_file(&file).ok();
     }
 
@@ -436,9 +479,7 @@ mod tests {
         let t = query_all_tasks(&dst).unwrap();
         assert_eq!(t[0].remind_minutes_before, Some(30));
         std::fs::remove_file(&file).ok();
-    }
-
-    #[test]
+    }    #[test]
     fn import_v1_converts_events_to_tasks() {
         let file = std::env::temp_dir().join(format!("ws-bk1-{}.json", std::process::id()));
         std::fs::write(
@@ -522,7 +563,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 9);
+        assert_eq!(doc["version"], 10);
         std::fs::remove_file(&file).ok();
     }
 
@@ -588,7 +629,7 @@ mod tests {
 
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 9);
+        assert_eq!(doc["version"], 10);
         std::fs::remove_file(&file).ok();
     }
 
@@ -632,7 +673,7 @@ mod tests {
         // 导出内容不含 FTS 数据（虚拟表不导出）
         let text = std::fs::read_to_string(&file).unwrap();
         let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
-        assert_eq!(doc["version"], 9);
+        assert_eq!(doc["version"], 10);
         assert!(doc.get("searchIndex").is_none(), "FTS 索引不导出");
 
         // 导入后全局搜索仍可用（索引重建）
@@ -641,6 +682,71 @@ mod tests {
         let hits = crate::models::global_search(&dst, "独特关键词").unwrap();
         assert_eq!(hits.len(), 1, "导入后索引重建可命中");
         assert_eq!(hits[0].kind, "note");
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn export_import_preserves_v10_tables() {
+        let src = mem();
+        src.execute(crate::models::LEDGER_ENTRY_INSERT, params!["e1", "expense", 1800, "餐饮", "牛肉面", "2026-09-11", "2026-09-11T12:00:00", "2026-09-11T12:00:00"]).unwrap();
+        src.execute(crate::models::WEIGHT_LOG_UPSERT, params!["w-2026-09-11", "2026-09-11", 72.5, "2026-09-11T08:00:00", "2026-09-11T08:00:00"]).unwrap();
+        src.execute(crate::models::WORKOUT_LOG_INSERT, params!["k1", "2026-09-10", "跑步", 30, "慢跑", "2026-09-10T19:00:00", "2026-09-10T19:00:00"]).unwrap();
+        let file = std::env::temp_dir().join(format!("ws-bk-v10-{}.json", std::process::id()));
+        export(&src, &file).unwrap();
+
+        let mut dst = mem();
+        let n = import(&mut dst, &file).unwrap();
+        assert_eq!(n, 3, "1 记账 + 1 体重 + 1 锻炼");
+        let ledger = crate::models::query_ledger_between(&dst, "0000-01-01", "9999-12-31").unwrap();
+        assert_eq!(ledger.len(), 1);
+        assert_eq!(ledger[0].amount, 1800);
+        assert_eq!(ledger[0].category, "餐饮");
+        let weights = crate::models::query_all_weights(&dst).unwrap();
+        assert_eq!(weights.len(), 1);
+        assert!((weights[0].weight - 72.5).abs() < f64::EPSILON);
+        let workouts = crate::models::query_workouts_between(&dst, "0000-01-01", "9999-12-31").unwrap();
+        assert_eq!(workouts.len(), 1);
+        assert_eq!(workouts[0].workout_type, "跑步");
+
+        let text = std::fs::read_to_string(&file).unwrap();
+        let doc: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(doc["version"], 10);
+        std::fs::remove_file(&file).ok();
+    }
+
+    #[test]
+    fn import_v9_backup_without_v10_tables_is_accepted() {
+        let file = std::env::temp_dir().join(format!("ws-bk-v9no10-{}.json", std::process::id()));
+        std::fs::write(
+            &file,
+            r#"{
+              "version": 9,
+              "tasks": [],
+              "notes": [],
+              "links": [],
+              "boards": [],
+              "habits": [],
+              "habitLogs": [],
+              "timeEntries": [],
+              "settings": []
+            }"#,
+        )
+        .unwrap();
+
+        let mut c = mem();
+        c.execute(crate::models::LEDGER_ENTRY_INSERT, params!["e-old", "expense", 100, "餐饮", "将被清空", "2026-09-11", "2026-09-11T12:00:00", "2026-09-11T12:00:00"]).unwrap();
+        c.execute(crate::models::WORKOUT_LOG_INSERT, params!["k-old", "2026-09-10", "跑步", 30, "", "2026-09-10T19:00:00", "2026-09-10T19:00:00"]).unwrap();
+        let n = import(&mut c, &file).unwrap();
+        assert_eq!(n, 0);
+        assert_eq!(
+            crate::models::query_ledger_between(&c, "0000-01-01", "9999-12-31").unwrap().len(),
+            0,
+            "v9 旧备份无 ledgerEntries，整库替换后为空"
+        );
+        assert_eq!(
+            crate::models::query_workouts_between(&c, "0000-01-01", "9999-12-31").unwrap().len(),
+            0
+        );
         std::fs::remove_file(&file).ok();
     }
 }

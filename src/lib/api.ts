@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput, Habit, HabitInput, HabitLog, TimeEntry, RunningTimer, SearchHit } from '../types';
+import type { Task, TaskInput, Note, NoteInput, Link, LinkInput, Board, BoardInput, Habit, HabitInput, HabitLog, TimeEntry, RunningTimer, SearchHit, LedgerEntry, LedgerEntryInput, WeightLog, WorkoutLog, WorkoutLogInput } from '../types';
 
 export interface WidgetData {
   todayTasks: Task[];
@@ -34,6 +34,17 @@ export const api = {
   habitDelete: (id: string) => invoke<void>('habit_delete', { id }),
   habitToggle: (id: string, date: string) => invoke<HabitLog | null>('habit_toggle', { id, date }),
   habitLogs: (from: string, to: string) => invoke<HabitLog[]>('habit_logs', { from, to }),
+  ledgerList: (from: string, to: string) => invoke<LedgerEntry[]>('ledger_list', { from, to }),
+  ledgerCreate: (input: LedgerEntryInput) => invoke<LedgerEntry>('ledger_create', { input }),
+  ledgerUpdate: (entry: LedgerEntry) => invoke<LedgerEntry>('ledger_update', { entry }),
+  ledgerDelete: (id: string) => invoke<void>('ledger_delete', { id }),
+  weightList: () => invoke<WeightLog[]>('weight_list'),
+  weightUpsert: (date: string, weight: number) => invoke<WeightLog>('weight_upsert', { date, weight }),
+  weightDelete: (id: string) => invoke<void>('weight_delete', { id }),
+  workoutList: (from: string, to: string) => invoke<WorkoutLog[]>('workout_list', { from, to }),
+  workoutCreate: (input: WorkoutLogInput) => invoke<WorkoutLog>('workout_create', { input }),
+  workoutUpdate: (log: WorkoutLog) => invoke<WorkoutLog>('workout_update', { log }),
+  workoutDelete: (id: string) => invoke<void>('workout_delete', { id }),
   noteList: () => invoke<Note[]>('note_list'),
   noteCreate: (input: NoteInput) => invoke<Note>('note_create', { input }),
   noteUpdate: (note: Note) => invoke<Note>('note_update', { note }),

@@ -19,7 +19,7 @@ interface Hit {
 
 const KIND_TAG: Record<SearchHit['kind'], string> = {
   task: '任务',
-  note: '笔记',
+  note: '速记',
   link: '入口',
 };
 
@@ -158,7 +158,7 @@ export default function QuickWindow() {
     ? entry.query === ''
       ? '入口模式：回车打开选中，输入 1-9 切换'
       : '入口过滤：回车打开选中'
-    : '搜索任务/笔记/入口，或输入任务（每天 9:00 / #标签 / 空格=入口）';
+    : '搜索任务/速记/入口，或输入任务（每天 9:00 / #标签 / 空格=入口）';
 
   const showCreateHint =
     !entry && hits.length === 0 && q.trim() !== '' && !notice && parseQuickTask(q).title !== '';

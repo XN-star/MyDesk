@@ -261,6 +261,38 @@ INSERT INTO search_index(kind, ref_id, title, body) SELECT 'note', id, cjk_space
 INSERT INTO search_index(kind, ref_id, title, body) SELECT 'link', id, cjk_space(title), cjk_space(target) FROM links;
 ";
 
+/// v9→v10：新增 ledger_entries / weight_logs / workout_logs 三表。
+pub const MIGRATE_V10: &str = "
+CREATE TABLE IF NOT EXISTS ledger_entries (
+  id         TEXT PRIMARY KEY,
+  kind       TEXT NOT NULL DEFAULT 'expense',
+  amount     INTEGER NOT NULL DEFAULT 0,
+  category   TEXT NOT NULL DEFAULT '',
+  note       TEXT NOT NULL DEFAULT '',
+  date       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ledger_entries_date ON ledger_entries (date);
+CREATE TABLE IF NOT EXISTS weight_logs (
+  id         TEXT PRIMARY KEY,
+  date       TEXT NOT NULL UNIQUE,
+  weight     REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS workout_logs (
+  id         TEXT PRIMARY KEY,
+  date       TEXT NOT NULL,
+  type       TEXT NOT NULL DEFAULT '其他',
+  minutes    INTEGER NOT NULL DEFAULT 0,
+  note       TEXT NOT NULL DEFAULT '',
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_workout_logs_date ON workout_logs (date);
+";
+
 /// 触发器定义（v8→v9 与备份导入重建共用；CREATE TRIGGER IF NOT EXISTS 幂等）。
 pub const SEARCH_TRIGGERS: &str = "
 CREATE TRIGGER IF NOT EXISTS tasks_ai AFTER INSERT ON tasks BEGIN
@@ -618,7 +650,7 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.pragma_update(None, "journal_mode", "WAL")?;
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     if version < 1 {
-        // 全新库：直接建 v9 形态。
+        // 全新库：直接建 v10 形态。
         // version==0 且已存在 events/tasks 表的极端情况（手动建的 v1/v2 库）按旧版处理。
         let has_events: bool = table_exists(conn, "events")?;
         let has_tasks: bool = table_exists(conn, "tasks")?;
@@ -632,7 +664,8 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         } else {
             conn.execute_batch(SCHEMA_V9)?;
             seed_default_board(conn)?;
-            conn.pragma_update(None, "user_version", 9)?;
+            conn.execute_batch(MIGRATE_V10)?;
+            conn.pragma_update(None, "user_version", 10)?;
             return Ok(());
         }
     } else if version == 1 {
@@ -647,7 +680,8 @@ pub fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     upgrade_to_v7(conn)?;
     upgrade_to_v8(conn)?;
     upgrade_to_v9(conn)?;
-    conn.pragma_update(None, "user_version", 9)?;
+    upgrade_to_v10(conn)?;
+    conn.pragma_update(None, "user_version", 10)?;
     Ok(())
 }
 
@@ -704,6 +738,13 @@ fn upgrade_to_v9(conn: &Connection) -> rusqlite::Result<()> {
     if !table_exists(conn, "search_index")? {
         conn.execute_batch(MIGRATE_V9)?;
         conn.execute_batch(SEARCH_TRIGGERS)?;
+    }
+    Ok(())
+}
+
+fn upgrade_to_v10(conn: &Connection) -> rusqlite::Result<()> {
+    if !table_exists(conn, "ledger_entries")? {
+        conn.execute_batch(MIGRATE_V10)?;
     }
     Ok(())
 }
@@ -805,7 +846,7 @@ mod tests {
             .unwrap();
         assert_eq!(n, 5);
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         assert!(column_exists(&c, "tasks", "remind_minutes_before").unwrap());
         assert!(column_exists(&c, "notes", "pinned").unwrap());
         assert!(column_exists(&c, "links", "target").unwrap());
@@ -832,7 +873,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         let events: i64 = c
             .query_row(
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='events'",
@@ -862,7 +903,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -887,7 +928,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         let kept: String = c
             .query_row("SELECT title FROM tasks WHERE id='t1'", [], |r| r.get(0))
             .unwrap();
@@ -914,7 +955,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
@@ -940,7 +981,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         let name: String = c
             .query_row("SELECT name FROM boards WHERE id='default'", [], |r| r.get(0))
             .unwrap();
@@ -979,7 +1020,7 @@ mod tests {
             .unwrap();
         assert_eq!(n, 8);
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         assert!(column_exists(&c, "time_entries", "task_id").unwrap());
         assert!(column_exists(&c, "time_entries", "ended_at").unwrap());
     }
@@ -1003,7 +1044,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
@@ -1019,7 +1060,7 @@ mod tests {
     fn fresh_db_creates_fts_at_v9() {
         let c = mem();
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         assert!(table_exists(&c, "search_index").unwrap());
         let n: i64 = c
             .query_row(
@@ -1051,7 +1092,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         // 回填后可命中存量数据（CJK 按字索引，"预算"二字连续即命中）
         let hits = crate::models::global_search(&c, "预算").unwrap();
         assert_eq!(hits.len(), 2, "任务与笔记均命中");
@@ -1082,7 +1123,7 @@ mod tests {
         migrate(&c).unwrap();
 
         let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
-        assert_eq!(v, 9);
+        assert_eq!(v, 10);
         assert_eq!(
             c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
             1
@@ -1097,5 +1138,52 @@ mod tests {
             .query_row("SELECT name FROM boards WHERE id='b1'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(board, "工作");
+    }
+
+    #[test]
+    fn fresh_db_creates_all_tables_at_v10() {
+        let c = mem();
+        let n: i64 = c
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('ledger_entries','weight_logs','workout_logs')",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 3);
+        assert!(column_exists(&c, "ledger_entries", "amount").unwrap());
+        assert!(column_exists(&c, "weight_logs", "weight").unwrap());
+        assert!(column_exists(&c, "workout_logs", "minutes").unwrap());
+    }
+
+    #[test]
+    fn v9_db_upgrades_to_v10_keeps_data() {
+        let c = rusqlite::Connection::open_in_memory().unwrap();
+        // SCHEMA_V9 的 FTS 触发器引用 cjk_space，须先注册再插数据。
+        register_cjk_space(&c).unwrap();
+        c.execute_batch(SCHEMA_V9).unwrap();
+        c.execute_batch("PRAGMA user_version = 9;").unwrap();
+        c.execute(TASK_INSERT_MIN, params!["t1", "旧任务", ""]).unwrap();
+        c.execute(
+            "INSERT INTO habits (id, name, frequency, reminder, archived, created_at, updated_at) VALUES ('h1', '健身', 'daily', NULL, 0, '2026-09-10T10:00:00', '2026-09-10T10:00:00')",
+            [],
+        )
+        .unwrap();
+
+        migrate(&c).unwrap();
+
+        let v: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(v, 10);
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get::<_, i64>(0)).unwrap(),
+            1
+        );
+        assert_eq!(
+            c.query_row("SELECT COUNT(*) FROM habits", [], |r| r.get::<_, i64>(0)).unwrap(),
+            1
+        );
+        assert!(table_exists(&c, "ledger_entries").unwrap());
+        assert!(table_exists(&c, "weight_logs").unwrap());
+        assert!(table_exists(&c, "workout_logs").unwrap());
     }
 }

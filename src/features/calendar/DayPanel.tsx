@@ -107,7 +107,7 @@ export default function DayPanel({ date }: { date: string }) {
       <section>
         {notesEnabled && (
           <button className="btn day-note-btn" onClick={() => void openDailyNote()}>
-            📝 {dailyNote ? '打开当日笔记' : '创建当日笔记'}
+            📝 {dailyNote ? '打开当日速记' : '创建当日速记'}
           </button>
         )}
       </section>

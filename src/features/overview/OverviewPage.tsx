@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { dueLabel, timeShort, toDateStr } from '../../lib/format';
 import { api } from '../../lib/api';
 import type { TimeEntry } from '../../types';
@@ -7,9 +7,13 @@ import { useLinksStore } from '../../stores/links';
 import { useNotesStore } from '../../stores/notes';
 import { useTaskStore } from '../../stores/tasks';
 import { useUiStore } from '../../stores/ui';
+import { useLedgerStore } from '../../stores/ledger';
+import { useFitnessStore } from '../../stores/fitness';
 import { kindIcon } from '../links/links';
 import { frequentLinks, recentNotes, taskStats, todayFocus, todayHabits, upcomingTasks, weekReport } from './overview';
 import { useTimerStore } from '../../stores/timer';
+import { centsToYuan, monthSummary } from '../ledger/ledger';
+import { latestWeight, weeklyWorkouts } from '../fitness/fitness';
 
 export default function OverviewPage() {
   const tasks = useTaskStore((s) => s.tasks);
@@ -22,6 +26,11 @@ export default function OverviewPage() {
   const habits = useHabitsStore((s) => s.habits);
   const habitLogs = useHabitsStore((s) => s.logs);
   const loadHabits = useHabitsStore((s) => s.load);
+  const ledgerEntries = useLedgerStore((s) => s.entries);
+  const loadLedger = useLedgerStore((s) => s.load);
+  const weights = useFitnessStore((s) => s.weights);
+  const workouts = useFitnessStore((s) => s.workouts);
+  const loadFitness = useFitnessStore((s) => s.load);
   const running = useTimerStore((s) => s.running);
   const loadTimer = useTimerStore((s) => s.load);
   const setPage = useUiStore((s) => s.setPage);
@@ -31,8 +40,10 @@ export default function OverviewPage() {
     void loadNotes();
     void loadLinks();
     void loadHabits();
+    void loadLedger();
+    void loadFitness();
     void loadTimer();
-  }, [loadTasks, loadNotes, loadLinks, loadHabits, loadTimer]);
+  }, [loadTasks, loadNotes, loadLinks, loadHabits, loadLedger, loadFitness, loadTimer]);
 
   // 30s 拉一次今日计时条目；进行中条目的分钟数由 timer store 心跳带动重算
   useEffect(() => {
@@ -54,6 +65,9 @@ export default function OverviewPage() {
   const today = toDateStr(new Date());
   const habitsToday = todayHabits(habits, habitLogs, today);
   const focus = todayFocus(dayEntries, tasks, new Date());
+  const monthSpend = useMemo(() => monthSummary(ledgerEntries), [ledgerEntries]);
+  const latest = useMemo(() => latestWeight(weights), [weights]);
+  const wk = useMemo(() => weeklyWorkouts(workouts, today), [workouts, today]);
   const delta = (cur: number, prev: number) => {
     const d = cur - prev;
     if (d === 0) return <span className="ov-delta">持平</span>;
@@ -100,9 +114,9 @@ export default function OverviewPage() {
           )}
         </button>
         <button className="panel overview-card" onClick={() => setPage('notes')}>
-          <h3>📝 最近笔记</h3>
+          <h3>📝 最近速记</h3>
           {notes5.length === 0 ? (
-            <p className="muted">还没有笔记</p>
+            <p className="muted">还没有速记</p>
           ) : (
             <ul className="overview-list">
               {notes5.map((n) => (
@@ -129,7 +143,7 @@ export default function OverviewPage() {
           </div>
         </button>
         <button className="panel overview-card" onClick={() => setPage('habits')}>
-          <h3>◉ 今日习惯</h3>
+          <h3>◉ 今日打卡</h3>
           {habits.length === 0 ? (
             <p className="muted">还没有习惯</p>
           ) : (
@@ -174,6 +188,42 @@ export default function OverviewPage() {
                 ))}
               </ul>
             </>
+          )}
+        </button>
+        <button className="panel overview-card" onClick={() => setPage('ledger')}>
+          <h3>¥ 本月支出</h3>
+          {ledgerEntries.length === 0 ? (
+            <p className="muted">这个月还没有记账</p>
+          ) : (
+            <>
+              <div className="overview-stats">
+                <span>
+                  支出 <b>{centsToYuan(monthSpend.expense)}</b> 元
+                </span>
+                <span>
+                  结余 <b>{centsToYuan(monthSpend.balance)}</b> 元
+                </span>
+              </div>
+              <p className="muted ov-hint">点开账本看看花在哪了</p>
+            </>
+          )}
+        </button>
+        <button className="panel overview-card" onClick={() => setPage('fitness')}>
+          <h3>⚖ 轻盈计划</h3>
+          {latest ? (
+            <>
+              <div className="overview-stats">
+                <span>
+                  <b>{Number.isInteger(latest.weight) ? latest.weight : latest.weight.toFixed(1)}</b> kg
+                </span>
+                <span>
+                  本周 <b>{wk.count}</b> 次锻炼
+                </span>
+              </div>
+              <p className="muted ov-hint">keep 住这份轻盈</p>
+            </>
+          ) : (
+            <p className="muted">还没有体重记录</p>
           )}
         </button>
       </div>
