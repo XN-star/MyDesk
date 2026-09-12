@@ -1,5 +1,6 @@
 import type { Task } from '../types';
 import { fromDate } from './format';
+import { isFocusModeTask } from './focusTask';
 
 export interface DaySummary {
   todoCount: number;
@@ -18,7 +19,9 @@ function dueLabelOf(iso: string, now: Date): string {
   return `${Math.round(hours / 24)}天后`;
 }
 
-export function summarize(tasks: Task[], today: string, now: Date = new Date()): DaySummary {
+export function summarize(allTasks: Task[], today: string, now: Date = new Date()): DaySummary {
+  // 专注模式隐藏任务不进看板，也不计入顶栏统计
+  const tasks = allTasks.filter((t) => !isFocusModeTask(t));
   const todoCount = tasks.filter((t) => t.status !== 'done').length;
   const todayCount = tasks.filter((t) => t.dueAt?.slice(0, 10) === today).length;
   const next = tasks

@@ -44,6 +44,20 @@ describe('taskStats', () => {
     const stats = taskStats([task({ id: '1', status: 'done', doneAt: '2026-09-08T23:00:00' })], NOW);
     expect(stats.doneToday).toBe(0);
   });
+
+  it('专注模式隐藏任务不计入任何统计', () => {
+    const stats = taskStats(
+      [
+        task({ id: 'f1', title: 'focus_mode:冥想' }), // 隐藏待办
+        task({ id: 'f2', title: 'focus_mode:读书', status: 'doing' }), // 隐藏进行中
+        task({ id: 'f3', title: 'focus_mode:散步', status: 'done', doneAt: '2026-09-09T09:00:00' }), // 隐藏今日完成
+        task({ id: 'f4', title: 'focus_mode:写作', dueAt: '2026-09-08T10:00:00' }), // 隐藏逾期
+        task({ id: 'v', title: '可见任务' }), // 唯一可见待办
+      ],
+      NOW,
+    );
+    expect(stats).toEqual({ todoToday: 1, doing: 0, doneToday: 0, overdue: 0 });
+  });
 });
 
 describe('upcomingTasks', () => {
@@ -60,6 +74,17 @@ describe('upcomingTasks', () => {
       NOW,
     );
     expect(list.map((t) => t.id)).toEqual(['a', 'b']);
+  });
+
+  it('排除专注模式隐藏任务', () => {
+    const list = upcomingTasks(
+      [
+        task({ id: 'f1', title: 'focus_mode:读书', dueAt: '2026-09-10T10:00:00' }),
+        task({ id: 'a', dueAt: '2026-09-10T11:00:00' }),
+      ],
+      NOW,
+    );
+    expect(list.map((t) => t.id)).toEqual(['a']);
   });
 });
 
@@ -115,6 +140,20 @@ describe('weekReport', () => {
     );
     expect(r.overdue).toBe(1);
     expect(r.overduePrev).toBe(1);
+  });
+
+  it('专注模式隐藏任务不计入本周完成/新建/逾期', () => {
+    const r = weekReport(
+      [
+        task({ id: 'f1', title: 'focus_mode:冥想', status: 'done', doneAt: '2026-09-08T09:00:00' }),
+        task({ id: 'f2', title: 'focus_mode:读书', createdAt: '2026-09-07T09:00:00' }),
+        task({ id: 'f3', title: 'focus_mode:散步', dueAt: '2026-09-08T10:00:00' }),
+      ],
+      NOW,
+    );
+    expect(r.done).toBe(0);
+    expect(r.created).toBe(0);
+    expect(r.overdue).toBe(0);
   });
 
   it('周日（now=2026-09-13）本周一=2026-09-07', () => {

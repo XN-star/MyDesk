@@ -1,5 +1,6 @@
 import type { Task, TaskStatus } from '../../types';
 import { fromDate } from '../../lib/format';
+import { isFocusModeTask } from '../../lib/focusTask';
 
 export const STATUSES: TaskStatus[] = ['todo', 'doing', 'done'];
 
@@ -44,10 +45,7 @@ export function applyMove(
   );
 }
 
-/** 专注模式隐藏任务标题前缀（与 features/focus/focusModes.ts 保持一致，避免循环依赖）。 */
-const FOCUS_MODE_PREFIX = 'focus_mode:';
-
 /** 过滤出指定看板的任务（保持原顺序）；专注模式隐藏任务不在看板显示。 */
 export function tasksOfBoard(tasks: Task[], boardId: string): Task[] {
-  return tasks.filter((t) => t.boardId === boardId && !t.title.startsWith(FOCUS_MODE_PREFIX));
+  return tasks.filter((t) => t.boardId === boardId && !isFocusModeTask(t));
 }

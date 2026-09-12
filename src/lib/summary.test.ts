@@ -16,4 +16,16 @@ describe('summarize', () => {
     expect(s.todayCount).toBe(2);
     expect(s.nextLabel).toBe('2小时后');
   });
+
+  it('专注模式隐藏任务不计入统计', () => {
+    const tasks = [
+      { ...base, id: 'f1', title: 'focus_mode:冥想', status: 'todo', priority: 1, dueAt: '2026-09-07T08:00:00' },
+      { ...base, id: 'f2', title: 'focus_mode:读书', status: 'doing', priority: 1, dueAt: null },
+      { ...base, id: 'v', title: '可见任务', status: 'todo', priority: 1, dueAt: '2026-09-09T09:00:00' },
+    ] as never[];
+    const s = summarize(tasks, '2026-09-07', new Date('2026-09-07T10:00:00'));
+    expect(s.todoCount).toBe(1);
+    expect(s.todayCount).toBe(0);
+    expect(s.nextLabel).toBe('2天后');
+  });
 });

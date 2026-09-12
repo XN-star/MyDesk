@@ -1,7 +1,8 @@
 import type { Task } from '../../types';
+import { FOCUS_MODE_PREFIX, isFocusModeTask } from '../../lib/focusTask';
 
-/** 隐藏任务标题前缀：专注模式对应的任务（不在看板显示）。 */
-export const FOCUS_MODE_PREFIX = 'focus_mode:';
+// re-export 保持既有调用方与测试的导入路径不变
+export { FOCUS_MODE_PREFIX, isFocusModeTask };
 
 export interface FocusMode {
   /** 模式名（同时是隐藏任务的标题） */
@@ -33,9 +34,6 @@ export function focusModeOfTask(title: string): string | null {
 }
 
 /** 判断任务是否为看板应隐藏的专注模式任务。 */
-export function isFocusModeTask(task: Pick<Task, 'title'>): boolean {
-  return task.title.startsWith(FOCUS_MODE_PREFIX);
-}
 
 /**
  * 找到模式对应的隐藏任务（按标题精确匹配）。

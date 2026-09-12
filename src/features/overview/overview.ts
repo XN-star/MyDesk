@@ -1,5 +1,6 @@
 import type { Habit, HabitLog, Link, Note, Task, TimeEntry } from '../../types';
 import { fromDate, toDateStr } from '../../lib/format';
+import { isFocusModeTask } from '../../lib/focusTask';
 import { dailyChecked } from '../habits/habits';
 
 export interface TaskStats {
@@ -17,6 +18,7 @@ export function taskStats(tasks: Task[], now: Date): TaskStats {
   let doneToday = 0;
   let overdue = 0;
   for (const t of tasks) {
+    if (isFocusModeTask(t)) continue; // 专注模式隐藏任务不进看板，也不计入统计
     if (t.status === 'doing') {
       doing += 1;
       continue;
@@ -39,7 +41,7 @@ export function upcomingTasks(tasks: Task[], now: Date, days = 7, limit = 5): Ta
   to.setDate(to.getDate() + days);
   const toStr = fromDate(to);
   return tasks
-    .filter((t) => t.status !== 'done' && !!t.dueAt && t.dueAt >= from && t.dueAt <= toStr)
+    .filter((t) => t.status !== 'done' && !isFocusModeTask(t) && !!t.dueAt && t.dueAt >= from && t.dueAt <= toStr)
     .sort((a, b) => (a.dueAt! < b.dueAt! ? -1 : 1))
     .slice(0, limit);
 }
@@ -96,6 +98,7 @@ export function weekReport(tasks: Task[], now: Date): WeekReport {
   let createdPrev = 0;
   let overduePrev = 0;
   for (const t of tasks) {
+    if (isFocusModeTask(t)) continue; // 专注模式隐藏任务不计入周报
     if (t.status === 'done') {
       if (inRange(t.doneAt, start, now)) done += 1;
       else if (inRange(t.doneAt, prevStart, start)) donePrev += 1;
